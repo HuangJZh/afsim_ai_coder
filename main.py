@@ -51,22 +51,32 @@ def collect_project_requirements():
     print("示例：创建一个战斗机空战模拟项目，包含F-22和SU-35平台")
     print("     配置雷达、导弹系统，创建空战场景")
     print("     实现飞行控制和战术处理器")
+    print("提示：输入 //end 结束输入")
     print("-" * 80)
     
     requirements = []
-    print("开始输入（输入空行结束）：")
+    print("开始输入：")
     
     line_count = 0
     while True:
         try:
             line = input().strip()
-            if line == "" and line_count > 0:
+            # 检查是否输入了结束命令
+            if line == "//end":
+                if line_count == 0:
+                    print("⚠️  尚未输入任何内容，请至少输入一行需求")
+                    continue
                 break
             if line:
                 requirements.append(line)
                 line_count += 1
         except KeyboardInterrupt:
             print("\n\n输入中断")
+            return None
+        except EOFError:
+            print("\n\n输入结束")
+            if line_count > 0:
+                break
             return None
     
     if not requirements:
