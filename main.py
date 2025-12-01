@@ -1,7 +1,7 @@
-# main.py (完全多阶段生成版)
 import os
 import sys
 import warnings
+from typing import Dict
 
 # 解决OpenMP库冲突
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -9,7 +9,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 warnings.filterwarnings("ignore")
 
 import time
-from rag_enhanced import MultiStageChatSystem
+from multi_stage_generator import MultiStageChatSystem  
 from utils import setup_logging, ConfigManager
 
 def check_environment():
@@ -75,6 +75,66 @@ def collect_project_requirements():
     
     return "\n".join(requirements)
 
+def display_generated_project(result, total_time):
+    """显示生成的项目结果"""
+    print("\n" + "=" * 80)
+    print("生成完成！")
+    print("=" * 80)
+    
+    if result.get("success"):
+        print(f"✅ 项目生成成功！")
+        print(f"📁 项目位置: {result['project_dir']}")
+        print(f"📄 生成文件数: {len(result.get('generated_files', []))}")
+        print(f"⏱️  总耗时: {total_time:.1f}秒")
+        
+        # 显示文件列表
+        print("\n📋 生成的文件:")
+        print("-" * 40)
+        for i, file_path in enumerate(result.get('generated_files', []), 1):
+            print(f"  {i:2d}. {file_path}")
+        
+        # 显示阶段统计
+        if result.get("report", {}).get("summary"):
+            summary = result["report"]["summary"]
+            print(f"\n📊 阶段统计:")
+            print(f"   成功阶段: {summary['successful_stages']}/{summary['total_stages']}")
+            print(f"   平均阶段耗时: {summary['avg_stage_duration']:.1f}秒")
+        
+        print(f"\n💡 提示: 请查看 {result['project_dir']} 文件夹获取完整项目。")
+        
+        return True
+    else:
+        print(f"❌ 项目生成失败")
+        if result.get("error"):
+            print(f"错误: {result['error']}")
+        return False
+
+def view_file_content(project_dir, files):
+    """查看特定文件的内容"""
+    print("\n可查看的文件:")
+    for i, file_path in enumerate(files[:10], 1):
+        print(f"  {i:2d}. {file_path}")
+    
+    try:
+        choice = input("\n请输入文件编号（0跳过）: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(files):
+            file_idx = int(choice) - 1
+            file_path = files[file_idx]
+            full_path = os.path.join(project_dir, file_path)
+            
+            if os.path.exists(full_path):
+                print(f"\n{'='*60}")
+                print(f"文件内容: {file_path}")
+                print('='*60)
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    print(content[:1000])  # 只显示前1000字符
+                    if len(content) > 1000:
+                        print(f"\n... (文件过长，只显示前1000字符)")
+                print('='*60)
+    except:
+        pass
+
 def main():
     """主函数"""
     print("=" * 80)
@@ -107,7 +167,7 @@ def main():
         return
     
     try:
-        # 初始化多阶段生成系统
+        # 初始化多阶段生成系统 - 现在只需要导入一个类
         print("\n正在初始化多阶段生成系统...")
         chat_system = MultiStageChatSystem(
             project_root=project_root,
@@ -123,7 +183,7 @@ def main():
         print(f"   基础库: {', '.join(project_info['base_libraries'])}")
         print(f"   知识库: {chat_system.get_vector_db_info()}")
         
-        # 主循环
+        # 主循环 (保持不变)
         while True:
             # 收集项目需求
             query = collect_project_requirements()
@@ -147,61 +207,13 @@ def main():
             total_time = time.time() - start_time
             
             # 显示结果
-            print("\n" + "=" * 80)
-            print("生成完成！")
-            print("=" * 80)
+            success = display_generated_project(result, total_time)
             
-            if result.get("success"):
-                print(f"✅ 项目生成成功！")
-                print(f"📁 项目位置: {result['project_dir']}")
-                print(f"📄 生成文件数: {len(result.get('generated_files', []))}")
-                print(f"⏱️  总耗时: {total_time:.1f}秒")
-                
-                # 显示文件列表
-                print("\n📋 生成的文件:")
-                print("-" * 40)
-                for i, file_path in enumerate(result.get('generated_files', []), 1):
-                    print(f"  {i:2d}. {file_path}")
-                
-                # 显示阶段统计
-                if result.get("report", {}).get("summary"):
-                    summary = result["report"]["summary"]
-                    print(f"\n📊 阶段统计:")
-                    print(f"   成功阶段: {summary['successful_stages']}/{summary['total_stages']}")
-                    print(f"   平均阶段耗时: {summary['avg_stage_duration']:.1f}秒")
-                
-                print(f"\n💡 提示: 请查看 {result['project_dir']} 文件夹获取完整项目。")
-                
-                # 询问是否查看具体文件内容
+            # 如果生成成功，询问是否查看文件内容
+            if success:
                 view_files = input("\n是否查看某个文件的具体内容？(y/n): ").strip().lower()
                 if view_files == 'y' or view_files == 'yes':
-                    print("\n可查看的文件:")
-                    for i, file_path in enumerate(result.get('generated_files', [])[:10], 1):
-                        print(f"  {i:2d}. {file_path}")
-                    
-                    try:
-                        choice = input("\n请输入文件编号（0跳过）: ").strip()
-                        if choice.isdigit() and 1 <= int(choice) <= len(result['generated_files']):
-                            file_idx = int(choice) - 1
-                            file_path = result['generated_files'][file_idx]
-                            full_path = os.path.join(result['project_dir'], file_path)
-                            
-                            if os.path.exists(full_path):
-                                print(f"\n{'='*60}")
-                                print(f"文件内容: {file_path}")
-                                print('='*60)
-                                with open(full_path, 'r', encoding='utf-8') as f:
-                                    content = f.read()
-                                    print(content[:1000])  # 只显示前1000字符
-                                    if len(content) > 1000:
-                                        print(f"\n... (文件过长，只显示前1000字符)")
-                                print('='*60)
-                    except:
-                        pass
-            else:
-                print(f"❌ 项目生成失败")
-                if result.get("error"):
-                    print(f"错误: {result['error']}")
+                    view_file_content(result['project_dir'], result.get('generated_files', []))
             
             print("\n" + "=" * 80)
             

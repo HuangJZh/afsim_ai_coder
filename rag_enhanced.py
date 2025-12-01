@@ -3,12 +3,8 @@ import warnings
 import threading
 import time
 import logging
-import collections
 from typing import List, Dict, Any
 from functools import lru_cache
-import json
-from typing import Dict, List, Optional
-import re
 
 import torch
 from tqdm import tqdm
@@ -417,8 +413,6 @@ class EnhancedRAGChatSystem:
             project_learner=self.project_learner
         )
     
-        
-    
     def generate_enhanced_response(self, query: str) -> Dict[str, Any]:
         """生成增强的回答"""
         try:
@@ -473,8 +467,6 @@ class EnhancedRAGChatSystem:
             del self.vector_db
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
-    
 
 
 class EnhancedInputHandler:
@@ -712,7 +704,6 @@ class EnhancedInputHandler:
         print(f"生成的AFSIM代码 (耗时: {duration:.2f}秒)")
         print(result["result"])
         print(f"{'='*80}")
-
     
     def _clean_and_optimize_query(self, inputs: List[str]) -> str:
         """清理和优化查询输入"""
@@ -743,80 +734,3 @@ class EnhancedInputHandler:
         self.logger.info(f"查询优化: {len(lines)} -> {len(unique_lines)} 行")
         
         return optimized_query
-
-try:
-    from multi_stage_generator import MultiStageGenerator, AFSimProjectStructure
-    
-    class MultiStageChatSystem(EnhancedRAGChatSystem):
-        """支持多阶段生成的聊天系统"""
-        
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.project_analyzer = AFSimProjectStructure()
-            self.multi_stage_generator = MultiStageGenerator(self, self.config)
-        
-        def generate_complete_project(self, query: str, output_dir: str = None) -> Dict:
-            """生成完整的AFSIM项目"""
-            self.logger.info(f"开始生成完整项目: {query[:100]}...")
-            
-            # 使用多阶段生成器
-            result = self.multi_stage_generator.generate_project(query, output_dir)
-            
-            # 记录到对话历史
-            self.conversation_history.append({
-                'query': query,
-                'type': 'project_generation',
-                'result': result,
-                'timestamp': time.time()
-            })
-            
-            return result
-        
-        def _display_project_result(self, result: Dict):
-            """显示项目生成结果"""
-            print("\n" + "=" * 60)
-            print("项目生成结果")
-            print("=" * 60)
-            
-            if result.get("success"):
-                print(f"✅ 项目生成成功！")
-                print(f"位置: {result['project_dir']}")
-                print(f"生成文件数: {len(result.get('generated_files', []))}")
-                
-                # 显示生成的文件
-                print("\n生成的文件:")
-                print("-" * 40)
-                for file_path in result.get('generated_files', [])[:10]:  # 显示前10个
-                    print(f"  {file_path}")
-                
-                if len(result.get('generated_files', [])) > 10:
-                    print(f"  ... 还有 {len(result['generated_files']) - 10} 个文件")
-                
-                # 显示阶段统计
-                if result.get("report", {}).get("summary"):
-                    summary = result["report"]["summary"]
-                    print(f"\n阶段统计: {summary['successful_stages']}/{summary['total_stages']} 个阶段成功")
-                    print(f"总耗时: {result['report']['project_info']['total_duration']:.1f}秒")
-                
-                print(f"\n请查看 {result['project_dir']} 文件夹获取完整项目。")
-                
-            else:
-                print(f"❌ 项目生成失败")
-                if result.get("error"):
-                    print(f"错误: {result['error']}")
-            
-            print("=" * 60)
-            
-except ImportError as e:
-    # 如果multi_stage_generator.py不存在，定义一个空的类
-    print(f"⚠️  多阶段生成模块导入失败: {e}")
-    
-    class MultiStageChatSystem(EnhancedRAGChatSystem):
-        """占位类，用于兼容性"""
-        
-        def generate_complete_project(self, query: str, output_dir: str = None) -> Dict:
-            print("❌ 多阶段生成功能未启用")
-            return {"success": False, "error": "多阶段生成模块未加载"}
-        
-        def _display_project_result(self, result: Dict):
-            print("❌ 多阶段生成功能未启用")

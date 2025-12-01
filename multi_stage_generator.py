@@ -1,12 +1,12 @@
-# multi_stage_generator.py
+# multi_stage_generator.py (整合版)
 import os
 import json
 import re
 import time
+import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
-import logging
 
 @dataclass
 class GenerationStage:
@@ -836,3 +836,53 @@ run_instructions.txt应该包含：
                 "avg_stage_duration": total_duration / max(len(self.current_project["stages"]), 1)
             }
         }
+
+
+class MultiStageChatSystem:
+    """支持多阶段生成的聊天系统"""
+    
+    def __init__(self, project_root: str, model_path: str = None):
+        from rag_enhanced import EnhancedRAGChatSystem
+        from utils import setup_logging, ConfigManager
+        
+        # 设置日志
+        setup_logging()
+        self.logger = logging.getLogger(__name__)
+        
+        # 初始化基础RAG系统
+        self.chat_system = EnhancedRAGChatSystem(
+            project_root=project_root,
+            model_path=model_path
+        )
+        
+        # 加载配置
+        self.config = ConfigManager()
+        
+        # 初始化多阶段生成器
+        self.project_analyzer = AFSimProjectStructure()
+        self.multi_stage_generator = MultiStageGenerator(self.chat_system, self.config)
+    
+    def generate_complete_project(self, query: str, output_dir: str = None) -> Dict:
+        """生成完整的AFSIM项目"""
+        self.logger.info(f"开始生成完整项目: {query[:100]}...")
+        
+        # 使用多阶段生成器
+        result = self.multi_stage_generator.generate_project(query, output_dir)
+        
+        # 记录到对话历史
+        self.chat_system.conversation_history.append({
+            'query': query,
+            'type': 'project_generation',
+            'result': result,
+            'timestamp': time.time()
+        })
+        
+        return result
+    
+    def get_project_info(self):
+        """获取项目信息"""
+        return self.chat_system.get_project_info()
+    
+    def get_vector_db_info(self):
+        """获取向量数据库信息"""
+        return self.chat_system.get_vector_db_info()
