@@ -1,2 +1,5 @@
 vector_db_afsim_enhanced/
 demos/
+__pycache__/
+*.log
+project_analysis_report.json
