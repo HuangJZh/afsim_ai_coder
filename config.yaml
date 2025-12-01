@@ -1,0 +1,32 @@
+# config.yaml
+model:
+  path: "D:/Qwen/Qwen/Qwen3-0___6B"
+  # path: "D:/Qwen/Qwen/Qwen3-4B"
+  # path: "D:/Qwen/Qwen/Qwen3-8B"
+  max_tokens: 4096
+  temperature: 0.3
+  top_p: 0.9
+  top_k: 50
+  repetition_penalty: 1.1
+
+vector_db:
+  chunk_size: 2000  # 增大块大小，减少总块数
+  chunk_overlap: 300
+  persist_dir: "vector_db_afsim_enhanced"
+  search_k: 6
+  batch_size: 3000  # 批次大小
+
+project:
+  root: "D:/Qwen/Qwen3/afsim_ai_coder/demos"
+  base_libraries: ["base_types", "base_types_nx"]
+  max_file_size_mb: 5
+  skip_patterns: ["(1)", "(2)", "副本", "copy", "temp", "备份"]
+  encodings: ["utf-8", "gbk", "gb2312", "gb18030", "latin1", "cp1252"]
+
+logging:
+  level: "INFO"
+  file: "afsim_coder.log"
+
+embedding:
+  # model: "BAAI/bge-m3"
+  model: "BAAI/bge-small-zh-v1.5"
