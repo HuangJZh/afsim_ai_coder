@@ -72,10 +72,6 @@ generation:
       max_tokens: 700
       temperature: 0.15
       
-    - name: "integration"
-      description: "整合和验证所有文件"
-      max_tokens: 600
-      temperature: 0.1
   
   output:
     base_dir: "generated_projects"

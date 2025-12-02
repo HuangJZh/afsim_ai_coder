@@ -1,4 +1,3 @@
-# multi_stage_generator.py (整合版)
 import os
 import json
 import re
@@ -32,23 +31,17 @@ class AFSimProjectStructure:
     def analyze_requirements(self, query: str) -> Dict:
         """分析需求，确定项目结构"""
         query_lower = query.lower()
-        
-        # 检测项目类型
-        project_type = "standard"
-        if any(word in query_lower for word in ["简单", "simple", "基础", "basic"]):
-            project_type = "simple"
-        
+                
         # 检测需要的组件
         components = self._detect_components(query_lower)
         
         # 构建项目结构
-        structure = self._build_project_structure(project_type, components)
+        structure = self._build_project_structure(components)
         
         return {
-            "project_type": project_type,
             "components": components,
             "structure": structure,
-            "stages": self._generate_stages(project_type, components)
+            "stages": self._generate_stages(components)
         }
     
     def _detect_components(self, query: str) -> Dict[str, bool]:
@@ -74,7 +67,7 @@ class AFSimProjectStructure:
             ]),
         }
     
-    def _build_project_structure(self, project_type: str, components: Dict) -> Dict:
+    def _build_project_structure(self, components: Dict) -> Dict:
         """构建项目结构"""
         structure = {
             "files": self.base_files.copy(),
@@ -98,14 +91,6 @@ class AFSimProjectStructure:
                 if folder_name not in structure["folders"]:
                     structure["folders"].append(folder_name)
         
-        # 根据项目类型添加特殊文件
-        if project_type == "simple":
-            # 简单项目只保留基础文件
-            structure["files"] = ["main.txt", "README.md"]
-        elif project_type == "standard":
-            # 标准项目添加输入变量文件
-            structure["files"].append("input_variables.txt")
-        
         # 确保至少有平台和场景文件夹（大部分项目都需要）
         if "platforms" not in structure["folders"] and components["platforms"]:
             structure["folders"].append("platforms")
@@ -121,7 +106,7 @@ class AFSimProjectStructure:
         
         return structure
     
-    def _generate_stages(self, project_type: str, components: Dict) -> List[Dict]:
+    def _generate_stages(self, components: Dict) -> List[Dict]:
         """生成阶段计划"""
         stages = [
             {
@@ -132,14 +117,13 @@ class AFSimProjectStructure:
             }
         ]
 
-        # 动态添加主程序阶段（大部分项目都需要）
-        if project_type != "simple":
-            stages.append({
-                "name": "main_program",
-                "description": "生成主程序文件",
-                "depends_on": ["project_structure"],
-                "output_patterns": ["main.txt"]
-            })    
+       
+        stages.append({
+            "name": "main_program",
+            "description": "生成主程序文件",
+            "depends_on": ["project_structure"],
+            "output_patterns": ["main.txt"]
+        })    
         
         # 根据检测到的组件添加相应阶段
         component_stages = {
@@ -203,17 +187,7 @@ class AFSimProjectStructure:
                 # 添加阶段
                 if not any(s["name"] == stage_config["name"] for s in stages):
                     stages.append(stage_config)
-        
-        # 添加集成阶段（如果有其他阶段的话）
-        if len(stages) > 1:  # 除了project_structure还有其他阶段
-            integration_deps = [stage["name"] for stage in stages[1:] if stage["name"] != "integration"]
-            stages.append({
-                "name": "integration",
-                "description": "整合和验证所有文件",
-                "depends_on": integration_deps,
-                "output_patterns": ["README.md", "run_instructions.txt"]
-            })
-        
+            
         return stages
 
 class MultiStageGenerator:
@@ -401,19 +375,19 @@ class MultiStageGenerator:
         
         # 只保留需要的阶段指令
         stage_instructions = {
-            "project_structure": f"""请分析AFSIM项目需求并规划项目结构。
+            "project_structure": f"""分析AFSIM项目需求并规划项目结构。
 
     原始需求：{query}
 
-    请输出一个JSON格式的项目结构规划，包含以下信息：
+    输出一个JSON格式的项目结构规划，包含以下信息：
     1. 需要的组件列表
     2. 建议的文件结构
     3. 主要平台名称
     4. 主要场景描述
 
-    **请只输出AFSIM代码格式，不要其他内容**。""",
+    **只输出AFSIM代码格式**。""",
             
-            "signatures": f"""请生成AFSIM特征信号文件。
+            "signatures": f"""生成AFSIM特征信号文件。
 
     基于项目需求：{query}
     项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
@@ -430,14 +404,14 @@ class MultiStageGenerator:
     3. 角度依赖性
     4. 双基地特征（如适用）
 
-    请为每种特征信号生成单独的.txt文件。
+    为每种特征信号生成单独的.txt文件。
     使用以下格式分隔不同文件：
     === Feature_Name_signature.txt ===
     [特征信号文件内容]
 
-    请开始生成：""",
+    开始生成：""",
             
-            "main_program": f"""请生成AFSIM主程序文件（main.txt）。
+            "main_program": f"""生成AFSIM主程序文件（main.txt）。
 
     基于以下项目需求：{query}
 
@@ -446,16 +420,16 @@ class MultiStageGenerator:
     已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
 
     主程序必须包含：
-    1. 必要的导入语句（使用include语句）
+    1. 必要的include导入语句
     2. 全局变量和常量定义
     3. 场景初始化和设置
     4. 主事件循环
     5. 输出配置
     6. 仿真控制参数
 
-    请生成完整的main.txt文件内容：""",
+    生成完整的main.txt内容：""",
             
-            "platforms": f"""请生成AFSIM平台定义文件。
+            "platforms": f"""生成AFSIM平台定义文件。
 
     基于项目需求：{query}
 
@@ -473,16 +447,16 @@ class MultiStageGenerator:
     5. 行为定义
     6. 特征信号引用（如适用）
 
-    请为每个平台生成单独的.txt文件。
+    为每个平台生成单独的.txt文件。
     使用以下格式分隔不同文件：
     === Platform_Name.txt ===
     [平台文件内容]
     === 另一个平台.txt ===
     [另一个平台文件内容]
 
-    请开始生成：""",
+    开始生成：""",
             
-            "scenarios": f"""请生成AFSIM场景文件。
+            "scenarios": f"""生成AFSIM场景文件。
 
     基于项目需求：{query}
     项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
@@ -500,14 +474,14 @@ class MultiStageGenerator:
     4. 任务目标和约束
     5. 事件序列和触发器
 
-    请为每个场景生成单独的.txt文件。
+    为每个场景生成单独的.txt文件。
     使用以下格式分隔不同文件：
     === Scene_Name.txt ===
     [场景文件内容]
 
-    请开始生成：""",
+    开始生成：""",
             
-            "processors": f"""请生成AFSIM处理器文件。
+            "processors": f"""生成AFSIM处理器文件。
 
     基于项目需求：{query}
     项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
@@ -526,14 +500,14 @@ class MultiStageGenerator:
     4. 配置参数
     5. 性能指标
 
-    请为每个处理器生成单独的.txt文件。
+    为每个处理器生成单独的.txt文件。
     使用以下格式分隔不同文件：
     === Processor_Name.txt ===
     [处理器文件内容]
 
-    请开始生成：""",
+    开始生成：""",
             
-            "sensors": f"""请生成AFSIM传感器文件。
+            "sensors": f"""生成AFSIM传感器文件。
 
     基于项目需求：{query}
     项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
@@ -552,14 +526,14 @@ class MultiStageGenerator:
     4. 数据输出格式
     5. 功耗和性能
 
-    请为每个传感器生成单独的.txt文件。
+    为每个传感器生成单独的.txt文件。
     使用以下格式分隔不同文件：
     === Sensor_Name.txt ===
     [传感器文件内容]
 
-    请开始生成：""",
+    开始生成：""",
             
-            "weapons": f"""请生成AFSIM武器文件。
+            "weapons": f"""生成AFSIM武器文件。
 
     基于项目需求：{query}
     项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
@@ -578,15 +552,15 @@ class MultiStageGenerator:
     4. 战斗部配置
     5. 发射控制
 
-    请为每个武器生成单独的.txt文件。
+    为每个武器生成单独的.txt文件。
     使用以下格式分隔不同文件：
     === Weapon_Name.txt ===
     [武器文件内容]
 
-    请开始生成："""
+    开始生成："""
         }
         
-        instruction = stage_instructions.get(stage_name, f"请根据需求生成{stage_desc}。")
+        instruction = stage_instructions.get(stage_name, f"根据需求生成{stage_desc}。")
         return instruction
 
     def _get_platform_requirements(self) -> str:
@@ -632,14 +606,10 @@ class MultiStageGenerator:
             })
             
         elif stage_name in ["platforms", "scenarios", "processors", "sensors", "weapons", 
-                           "satellites", "ground_networks", "avionics"]:
+                           "signatures"]:
             # 使用智能文件分割
             files.extend(self._extract_multiple_files_smart(content, stage_name))
-            
-        elif stage_name == "integration":
-            # 处理集成文档
-            files.extend(self._extract_integration_files(content))
-        
+    
         return files
     
     def _extract_multiple_files_smart(self, content: str, folder_name: str) -> List[Dict]:
@@ -731,56 +701,6 @@ class MultiStageGenerator:
                 return match.group().strip()
         
         return ""
-    
-    def _extract_integration_files(self, content: str) -> List[Dict]:
-        """提取集成文件"""
-        files = []
-        
-        # 尝试分离README和运行说明
-        readme_patterns = [
-            r'# README\.md.*?\n(.*?)(?=# run_instructions\.txt|# 运行说明|\Z)',
-            r'README.*?\n(.*?)(?=运行说明|\Z)',
-        ]
-        
-        run_instructions_patterns = [
-            r'# run_instructions\.txt.*?\n(.*?)(?=# |\Z)',
-            r'运行说明.*?\n(.*?)(?=\Z)',
-        ]
-        
-        readme_content = ""
-        run_instructions_content = ""
-        
-        for pattern in readme_patterns:
-            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if match:
-                readme_content = match.group(1).strip()
-                break
-        
-        for pattern in run_instructions_patterns:
-            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if match:
-                run_instructions_content = match.group(1).strip()
-                break
-        
-        if not readme_content and not run_instructions_content:
-            # 如果无法分离，整个内容作为README
-            files.append({
-                "path": "README.md",
-                "content": content
-            })
-        else:
-            if readme_content:
-                files.append({
-                    "path": "README.md",
-                    "content": readme_content
-                })
-            if run_instructions_content:
-                files.append({
-                    "path": "run_instructions.txt",
-                    "content": run_instructions_content
-                })
-        
-        return files
     
     def _save_generated_files(self, files: List[Dict], output_dir: str) -> List[str]:
         """保存生成的文件"""
