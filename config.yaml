@@ -39,7 +39,7 @@ generation:
   stages:
     - name: "project_structure"
       description: "分析需求并规划项目结构"
-      max_tokens: 300
+      max_tokens: 500
       temperature: 0.1
     
     - name: "main_program"
