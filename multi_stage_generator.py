@@ -24,23 +24,12 @@ class AFSimProjectStructure:
     def __init__(self):
         self.structure_templates = {
             "simple": {
-                "files": ["main.txt"],
+                "files": ["project_name.txt"],
                 "folders": ["platforms", "scenarios"]
             },
             "standard": {
                 "files": ["main.txt", "README.md", "input_variables.txt"],
-                "folders": ["platforms", "scenarios", "processors", "weapons", "sensors"]
-            },
-            "complex": {
-                "files": ["main.txt", "README.md", "input_variables.txt", 
-                         "event_output.txt", "run_me_first.txt"],
-                "folders": ["platforms", "scenarios", "processors", 
-                           "weapons", "sensors", "patterns", "avionics", "doc"]
-            },
-            "satellite": {
-                "files": ["main.txt", "README.md", "satellite.json"],
-                "folders": ["platforms", "scenarios", "TLE", "satellites", 
-                           "ground_networks", "avionics"]
+                "folders": ["patterns","platforms", "scenarios", "processors", "weapons", "sensors","signatures"]
             }
         }
     
@@ -395,7 +384,7 @@ class MultiStageGenerator:
 4. 主要平台名称
 5. 主要场景描述
 
-请只输出JSON格式，不要其他内容。""",
+**请只输出AFSIM代码格式，不要其他内容**。""",
             
             "main_program": f"""请生成AFSIM主程序文件（main.txt）。
 
