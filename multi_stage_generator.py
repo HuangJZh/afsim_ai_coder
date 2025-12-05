@@ -266,6 +266,112 @@ class MultiStageGenerator:
         self.current_stage = None
         self.project_context = {}
         self.stage_results = {}
+
+    def _execute_stage(self, stage_info: Dict, query: str, output_dir: str) -> Dict:
+        """执行单个生成阶段 - 使用阶段感知RAG"""
+        stage_name = stage_info["name"]
+        stage_max_tokens = stage_info.get("max_tokens", 1024)
+        stage_temperature = stage_info.get("temperature", 0.3)
+        
+        try:
+            self.logger.info(f"执行阶段 {stage_name}，使用阶段感知RAG...")
+            
+            # 构建阶段特定的查询
+            stage_query = self._build_stage_query(stage_info, query)
+            
+            # 检查是否有阶段感知的RAG系统
+            if hasattr(self.chat_system, 'generate_stage_response'):
+                # 使用阶段感知RAG生成
+                result = self.chat_system.generate_stage_response(
+                    stage_name=stage_name,
+                    query=stage_query,
+                    project_context=self.project_context
+                )
+                
+                if not result or "result" not in result:
+                    return {
+                        "success": False,
+                        "error": "生成结果为空"
+                    }
+                
+                generated_content = result["result"]
+                
+                # 从结果中提取额外信息
+                if "stage_context" in result:
+                    self.logger.debug(f"阶段 {stage_name} 上下文: {result['stage_context'][:200]}...")
+                
+            else:
+                # 回退到原来的方法
+                prompt = self._build_stage_prompt(stage_info, query)
+                generation_params = {
+                    "max_tokens": stage_max_tokens,
+                    "temperature": stage_temperature
+                }
+                
+                if hasattr(self.chat_system, 'generate_enhanced_response_with_params'):
+                    rag_result = self.chat_system.generate_enhanced_response_with_params(
+                        prompt, 
+                        **generation_params
+                    )
+                else:
+                    rag_result = self.chat_system.generate_enhanced_response(prompt)
+                
+                if not rag_result or "result" not in rag_result:
+                    return {
+                        "success": False,
+                        "error": "生成结果为空"
+                    }
+                
+                generated_content = rag_result["result"]
+            
+            # 提取文件内容
+            files = self._extract_files_from_content(generated_content, stage_info, output_dir)
+            
+            # 保存文件
+            output_files = self._save_generated_files(files, output_dir)
+            
+            # 更新上下文
+            context = self._extract_context_from_content(generated_content)
+            self.project_context.update(context)
+            
+            # 记录阶段特定的学习
+            if hasattr(self.chat_system, 'project_learner') and stage_name in self.chat_system.project_learner.stage_learning_results:
+                stage_learning = self.chat_system.project_learner.stage_learning_results[stage_name]
+                self.logger.info(f"阶段 {stage_name} 使用了 {len(stage_learning.file_examples)} 个学习示例")
+            
+            return {
+                "success": True,
+                "output_files": output_files,
+                "context": context,
+                "raw_content": generated_content[:500] + "..." if len(generated_content) > 500 else generated_content,
+                "stage_name": stage_name,
+                "method": "stage_aware_rag"
+            }
+            
+        except Exception as e:
+            self.logger.error(f"执行阶段 {stage_name} 失败: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+        
+    def _build_stage_query(self, stage_info: Dict, query: str) -> str:
+        """构建阶段特定的查询"""
+        stage_name = stage_info["name"]
+        
+        # 阶段特定的查询增强
+        stage_queries = {
+            "project_structure": f"分析以下AFSIM项目需求并生成项目结构规划:\n{query}",
+            "main_program": f"根据项目需求生成主程序文件，需求:\n{query}",
+            "platforms": f"生成平台定义，基于项目需求:\n{query}\n已确定平台: {self.project_context.get('platforms', [])}",
+            "scenarios": f"生成场景文件，基于项目需求:\n{query}\n可用平台: {self.project_context.get('platforms', [])}",
+            "processors": f"生成处理器文件，基于项目需求:\n{query}\n平台上下文: {self.project_context.get('platforms', [])}",
+            "sensors": f"生成传感器文件，基于项目需求:\n{query}\n平台上下文: {self.project_context.get('platforms', [])}",
+            "weapons": f"生成武器文件，基于项目需求:\n{query}\n平台上下文: {self.project_context.get('platforms', [])}",
+            "signatures": f"生成特征信号文件，基于项目需求:\n{query}\n平台类型: {self.project_context.get('platforms', [])}"
+        }
+        
+        return stage_queries.get(stage_name, f"生成{stage_info['description']}，需求:\n{query}")
         
     def generate_project(self, query: str, output_dir: str = None) -> Dict:
         """生成完整的AFSIM项目"""

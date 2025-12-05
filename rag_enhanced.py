@@ -469,3 +469,376 @@ class EnhancedRAGChatSystem:
             torch.cuda.empty_cache()
 
 
+# 在rag_enhanced.py中添加以下类和方法
+class StageAwareRAGSystem:
+    """阶段感知的RAG系统"""
+    
+    def __init__(self, project_learner: AFSIMProjectLearner, vector_db, embeddings, model, tokenizer):
+        self.project_learner = project_learner
+        self.vector_db = vector_db
+        self.embeddings = embeddings
+        self.model = model
+        self.tokenizer = tokenizer
+        self.config = ConfigManager()
+        self.logger = logging.getLogger(__name__)
+        
+        # 阶段特定的检索器
+        self.stage_retrievers = {}
+        
+    def build_stage_aware_retriever(self, stage_name: str):
+        """为特定阶段构建感知检索器"""
+        try:
+            # 获取阶段特定的上下文
+            stage_context = self.project_learner.get_stage_context(stage_name)
+            
+            # 阶段特定的检索参数
+            search_kwargs = {
+                "k": self.config.get(f'stages.{stage_name}.search_k', 8),
+                "score_threshold": self.config.get(f'stages.{stage_name}.score_threshold', 0.7)
+            }
+            
+            # 创建阶段感知的检索器
+            retriever = self.vector_db.as_retriever(search_kwargs=search_kwargs)
+            
+            # 增强检索器
+            enhanced_retriever = self._enhance_retriever_for_stage(retriever, stage_name, stage_context)
+            
+            self.stage_retrievers[stage_name] = enhanced_retriever
+            return enhanced_retriever
+            
+        except Exception as e:
+            self.logger.error(f"构建阶段 {stage_name} 检索器失败: {e}")
+            return self.vector_db.as_retriever(search_kwargs={"k": 6})
+    
+    def _enhance_retriever_for_stage(self, retriever, stage_name: str, stage_context: str):
+        """为特定阶段增强检索器"""
+        
+        class StageAwareRetriever:
+            def __init__(self, base_retriever, stage_name, stage_context, project_learner):
+                self.base_retriever = base_retriever
+                self.stage_name = stage_name
+                self.stage_context = stage_context
+                self.project_learner = project_learner
+                self.logger = logging.getLogger(__name__)
+            
+            def get_relevant_documents(self, query: str):
+                """获取相关文档，考虑阶段上下文"""
+                try:
+                    # 增强查询
+                    enhanced_query = self._enhance_query_for_stage(query)
+                    
+                    # 执行基础检索
+                    base_docs = self.base_retriever.get_relevant_documents(enhanced_query)
+                    
+                    # 过滤和排序文档
+                    filtered_docs = self._filter_docs_by_stage(base_docs)
+                    sorted_docs = self._sort_docs_by_relevance(filtered_docs, query)
+                    
+                    return sorted_docs
+                    
+                except Exception as e:
+                    self.logger.error(f"检索文档失败: {e}")
+                    return []
+            
+            def _enhance_query_for_stage(self, query: str) -> str:
+                """为特定阶段增强查询"""
+                stage_keywords = {
+                    "project_structure": ["项目结构", "文件夹", "组织", "布局"],
+                    "platforms": ["平台", "飞机", "车辆", "平台类型"],
+                    "weapons": ["武器", "导弹", "发射", "战斗部"],
+                    "sensors": ["传感器", "雷达", "探测", "跟踪"],
+                    "processors": ["处理器", "控制", "算法", "决策"],
+                    "scenarios": ["场景", "任务", "对抗", "环境"],
+                    "signatures": ["特征", "雷达反射", "红外", "光学"],
+                    "main_program": ["主程序", "入口", "初始化", "事件循环"]
+                }
+                
+                keywords = stage_keywords.get(self.stage_name, [])
+                enhanced = query
+                
+                # 添加阶段关键词
+                if keywords:
+                    enhanced += " " + " ".join(keywords[:3])
+                
+                # 添加阶段上下文中的关键词
+                context_words = re.findall(r'\b\w{4,}\b', self.stage_context)
+                if context_words:
+                    enhanced += " " + " ".join(context_words[:5])
+                
+                return enhanced
+            
+            def _filter_docs_by_stage(self, docs):
+                """根据阶段过滤文档"""
+                filtered = []
+                for doc in docs:
+                    if self._is_relevant_to_stage(doc):
+                        filtered.append(doc)
+                
+                # 如果过滤后文档太少，返回原始文档
+                if len(filtered) < 3:
+                    return docs[:5]
+                
+                return filtered[:8]  # 限制数量
+            
+            def _is_relevant_to_stage(self, doc) -> bool:
+                """检查文档是否与阶段相关"""
+                doc_text = doc.page_content.lower()
+                
+                # 阶段特定的关键词检查
+                stage_keywords_map = {
+                    "platforms": ["platform_type", "mover", "aircraft", "vehicle"],
+                    "weapons": ["weapon_type", "missile", "launch", "warhead"],
+                    "sensors": ["sensor_type", "radar", "detect", "track"],
+                    "processors": ["processor_type", "tasker", "controller", "algorithm"],
+                    "scenarios": ["scenario", "mission", "setup", "environment"],
+                    "signatures": ["signature", "rcs", "radar_cross_section", "emission"],
+                    "main_program": ["main", "include", "initialize", "event_loop"]
+                }
+                
+                keywords = stage_keywords_map.get(self.stage_name, [])
+                if keywords:
+                    return any(keyword in doc_text for keyword in keywords)
+                
+                return True
+            
+            def _sort_docs_by_relevance(self, docs, query: str):
+                """根据相关性排序文档"""
+                if len(docs) <= 1:
+                    return docs
+                
+                # 简单的相关性评分
+                scored_docs = []
+                query_lower = query.lower()
+                
+                for doc in docs:
+                    score = 0
+                    doc_text = doc.page_content.lower()
+                    
+                    # 查询词匹配
+                    query_words = set(re.findall(r'\b\w{3,}\b', query_lower))
+                    doc_words = set(re.findall(r'\b\w{3,}\b', doc_text))
+                    
+                    common_words = query_words.intersection(doc_words)
+                    score += len(common_words) * 2
+                    
+                    # 阶段关键词匹配
+                    if self.stage_name == "platforms" and "platform_type" in doc_text:
+                        score += 5
+                    elif self.stage_name == "weapons" and "weapon_type" in doc_text:
+                        score += 5
+                    
+                    # 元数据检查
+                    if hasattr(doc, 'metadata'):
+                        if "source" in doc.metadata and self.stage_name in doc.metadata["source"]:
+                            score += 3
+                    
+                    scored_docs.append((score, doc))
+                
+                # 按分数排序
+                scored_docs.sort(key=lambda x: x[0], reverse=True)
+                return [doc for _, doc in scored_docs]
+        
+        return StageAwareRetriever(retriever, stage_name, stage_context, self.project_learner)
+
+class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
+    """增强的阶段感知RAG聊天系统"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # 初始化阶段感知系统
+        self.stage_aware_system = StageAwareRAGSystem(
+            project_learner=self.project_learner,
+            vector_db=self.vector_db,
+            embeddings=self.embeddings,
+            model=self.model,
+            tokenizer=self.tokenizer
+        )
+        
+        # 阶段特定的QA链
+        self.stage_qa_chains = {}
+        
+        # 从demos中学习
+        self.logger.info("从demo项目中学习阶段模式...")
+        self.project_learner.learn_from_demos()
+        
+    def get_stage_aware_qa_chain(self, stage_name: str):
+        """获取阶段感知的QA链"""
+        if stage_name in self.stage_qa_chains:
+            return self.stage_qa_chains[stage_name]
+        
+        self.logger.info(f"为阶段 {stage_name} 构建QA链...")
+        
+        # 获取阶段特定的检索器
+        retriever = self.stage_aware_system.build_stage_aware_retriever(stage_name)
+        
+        # 创建阶段特定的LLM
+        class StageAwareLLM:
+            def __init__(self, model, tokenizer, project_learner, stage_name):
+                self.model = model
+                self.tokenizer = tokenizer
+                self.project_learner = project_learner
+                self.stage_name = stage_name
+                self.config = ConfigManager()
+                self.logger = logging.getLogger(__name__)
+            
+            def __call__(self, prompt):
+                try:
+                    # 阶段特定的生成参数
+                    stage_params = self.config.get(f'stages.{self.stage_name}', {})
+                    max_tokens = stage_params.get('max_tokens', self.config.get('model.max_tokens', 1024))
+                    temperature = stage_params.get('temperature', self.config.get('model.temperature', 0.2))
+                    
+                    inputs = self.tokenizer(
+                        prompt, 
+                        return_tensors="pt", 
+                        truncation=True, 
+                        max_length=32000,
+                        padding=True
+                    )
+                    inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+                    
+                    with torch.no_grad():
+                        outputs = self.model.generate(
+                            **inputs,
+                            max_new_tokens=max_tokens,
+                            do_sample=True,
+                            temperature=temperature,
+                            top_p=self.config.get('model.top_p', 0.9),
+                            pad_token_id=self.tokenizer.eos_token_id,
+                            repetition_penalty=self.config.get('model.repetition_penalty', 1.1)
+                        )
+                    
+                    response = self.tokenizer.decode(
+                        outputs[0][inputs['input_ids'].shape[1]:], 
+                        skip_special_tokens=True
+                    ).strip()
+                    
+                    return response
+                    
+                except Exception as e:
+                    self.logger.error(f"阶段 {self.stage_name} 生成回答时出错: {e}")
+                    return f"生成回答时出错: {str(e)}"
+        
+        # 创建阶段感知的QA链
+        class StageAwareQAChain:
+            def __init__(self, llm, retriever, project_learner, stage_name):
+                self.llm = llm
+                self.retriever = retriever
+                self.project_learner = project_learner
+                self.stage_name = stage_name
+                self.logger = logging.getLogger(__name__)
+            
+            def run(self, query: str, project_context: Dict = None) -> Dict[str, Any]:
+                try:
+                    # 获取阶段特定的学习结果
+                    stage_context = self.project_learner.get_stage_context(self.stage_name, query)
+                    
+                    # 检索相关文档
+                    docs = self.retriever.get_relevant_documents(query)
+                    
+                    # 构建增强提示词
+                    prompt = self._build_stage_prompt(query, stage_context, docs, project_context)
+                    
+                    # 生成回答
+                    response = self.llm(prompt)
+                    
+                    return {
+                        "result": response,
+                        "stage_name": self.stage_name,
+                        "source_documents": docs,
+                        "stage_context": stage_context,
+                        "prompt_length": len(prompt)
+                    }
+                    
+                except Exception as e:
+                    self.logger.error(f"阶段 {self.stage_name} QA链运行失败: {e}")
+                    return {
+                        "result": f"生成失败: {str(e)}",
+                        "stage_name": self.stage_name,
+                        "source_documents": [],
+                        "stage_context": "",
+                        "prompt_length": 0
+                    }
+            
+            def _build_stage_prompt(self, query: str, stage_context: str, docs: List, project_context: Dict = None) -> str:
+                """构建阶段特定的提示词"""
+                # 文档内容
+                doc_content = ""
+                for i, doc in enumerate(docs[:4], 1):  # 限制文档数量
+                    doc_content += f"示例文档 {i}:\n{doc.page_content[:500]}...\n\n"
+                
+                # 项目上下文
+                proj_context = ""
+                if project_context:
+                    proj_context = f"\n当前项目上下文:\n{json.dumps(project_context, indent=2, ensure_ascii=False)}\n"
+                
+                # 阶段特定的指令
+                stage_instructions = {
+                    "project_structure": "你需要分析AFSIM项目需求并规划项目结构。输出应该是一个清晰的JSON格式结构，包含必要的文件夹和文件规划。",
+                    "platforms": "你需要生成AFSIM平台定义。确保包含完整的平台类型定义、物理参数、组件配置和行为定义。",
+                    "weapons": "你需要生成AFSIM武器定义。包括武器类型、性能参数、制导系统和战斗部配置。",
+                    "sensors": "你需要生成AFSIM传感器定义。包含传感器类型、探测参数、工作模式和数据输出格式。",
+                    "processors": "你需要生成AFSIM处理器定义。包括处理器类型、输入输出接口、处理算法和配置参数。",
+                    "scenarios": "你需要生成AFSIM场景定义。包含场景描述、平台配置、环境设置和事件序列。",
+                    "signatures": "你需要生成AFSIM特征信号定义。包括特征类型、RCS值、角度依赖性和辐射特性。",
+                    "main_program": "你需要生成AFSIM主程序。包含必要的导入、初始化、事件循环和输出配置。"
+                }
+                
+                instruction = stage_instructions.get(self.stage_name, "请根据需求生成相应的AFSIM代码。")
+                
+                prompt = f"""{instruction}
+
+阶段学习总结:
+{stage_context}
+
+相关代码示例:
+{doc_content}
+{proj_context}
+用户需求: {query}
+
+请基于以上信息生成完整的{self.stage_name}阶段代码。
+输出要求:
+1. 只输出AFSIM代码，不添加额外解释
+2. 确保代码完整性和正确性
+3. 遵循示例中的最佳实践
+
+生成代码:"""
+                
+                return prompt
+        
+        # 创建LLM实例
+        llm = StageAwareLLM(self.model, self.tokenizer, self.project_learner, stage_name)
+        
+        # 创建QA链
+        qa_chain = StageAwareQAChain(llm, retriever, self.project_learner, stage_name)
+        
+        self.stage_qa_chains[stage_name] = qa_chain
+        return qa_chain
+    
+    def generate_stage_response(self, stage_name: str, query: str, project_context: Dict = None) -> Dict[str, Any]:
+        """生成阶段特定的响应"""
+        try:
+            # 获取阶段感知的QA链
+            qa_chain = self.get_stage_aware_qa_chain(stage_name)
+            
+            # 执行生成
+            result = qa_chain.run(query, project_context)
+            
+            # 记录到历史
+            self.conversation_history.append({
+                'stage': stage_name,
+                'query': query,
+                'response': result["result"],
+                'timestamp': time.time()
+            })
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"生成阶段 {stage_name} 响应失败: {e}")
+            return {
+                "result": f"生成失败: {str(e)}",
+                "stage_name": stage_name,
+                "error": str(e)
+            }
