@@ -1,11 +1,11 @@
 # config.yaml
 model:
-  path: "D:/HuangJZh/Qwen/Qwen3-4B"
+  path: "D:/Qwen/Qwen/Qwen3-4B"
   max_tokens: 1024
-  temperature: 0.3
+  temperature: 0.1
   top_p: 0.9
   top_k: 50
-  repetition_penalty: 1.1
+  repetition_penalty: 1.2
 
 vector_db:
   chunk_size: 350
@@ -13,11 +13,11 @@ vector_db:
   smart_chunking: true
   semantic_threshold: 0.8
   persist_dir: "vector_db_afsim_enhanced"
-  search_k: 5
+  search_k: 4
   batch_size: 2000
 
 project:
-  root: "D:/HuangJZh/Qwen3/afsim_ai_coder/demos"
+  root: "D:/Qwen/Qwen3/afsim_ai_coder/demos"
   base_libraries: ["base_types", "base_types_nx"]
   max_file_size_mb: 5
   skip_patterns: ["(1)", "(2)", "副本", "copy", "temp", "备份"]

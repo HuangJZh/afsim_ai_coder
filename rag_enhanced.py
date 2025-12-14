@@ -1,8 +1,8 @@
 import os
-import warnings
-import threading
 import time
 import logging
+import re
+import json
 from typing import List, Dict, Any
 from functools import lru_cache
 
@@ -19,7 +19,8 @@ from transformers import (
 )
 
 from project_learner import AFSIMProjectLearner
-from utils import ConfigManager, FileReader, InputStateManager, CodeValidator, setup_logging
+from utils import ConfigManager, FileReader, setup_logging
+
 
 class EnhancedRAGChatSystem:
     def __init__(self, 
@@ -40,9 +41,6 @@ class EnhancedRAGChatSystem:
         self.vector_db_dir = vector_db_dir or self.config.get('vector_db.persist_dir')
         self.model_path = model_path or self.config.get('model.path')
         self.embedding_model = embedding_model or self.config.get('embedding.model')
-        
-        # 初始化状态管理器
-        self.input_state = InputStateManager(max_buffer_size=50)
         
         self.logger.info("正在初始化AFSIM项目学习器...")
         self.project_learner = AFSIMProjectLearner(project_root)
@@ -203,7 +201,7 @@ class EnhancedRAGChatSystem:
             
             self.logger.info(f"文档分割完成，得到 {len(texts)} 个文本块")
 
-            # 修复：分批添加到向量数据库
+            # 分批添加到向量数据库
             self.logger.info("分批创建向量数据库...")
             vector_db = self._create_vector_db_in_batches(texts)
             
@@ -252,7 +250,7 @@ class EnhancedRAGChatSystem:
         return vector_db
     
     def create_enhanced_qa_chain(self):
-        """创建增强的QA链，包含项目上下文"""
+        """创建增强的QA链"""
         
         class CustomQwenLLM:
             def __init__(self, model, tokenizer, project_learner):
@@ -280,12 +278,9 @@ class EnhancedRAGChatSystem:
                             do_sample=True,
                             temperature=self.config.get('model.temperature'),
                             top_p=self.config.get('model.top_p'),
-                            top_k=self.config.get('model.top_k'),
                             pad_token_id=self.tokenizer.eos_token_id,
-                            eos_token_id=self.tokenizer.eos_token_id,
                             repetition_penalty=self.config.get('model.repetition_penalty'),
-                            num_return_sequences=1,
-                            use_cache=True  # 启用KV缓存
+                            use_cache=True
                         )
                     
                     response = self.tokenizer.decode(
@@ -308,12 +303,11 @@ class EnhancedRAGChatSystem:
                 self.llm = llm
                 self.retriever = retriever
                 self.project_learner = project_learner
-                self.validator = CodeValidator()
                 self.logger = logging.getLogger(__name__)
             
             def run(self, query):
                 try:
-                    # 检索相关文档（使用缓存）
+                    # 检索相关文档
                     docs = self.retriever.get_relevant_documents(query)
                     
                     # 获取项目上下文
@@ -326,14 +320,10 @@ class EnhancedRAGChatSystem:
                     # 生成回答
                     response = self.llm(prompt)
                     
-                    # 验证生成的代码
-                    validation_result = self.validator.validate_afsim_code(response)
-                    
                     return {
                         "result": response,
                         "source_documents": docs,
-                        "project_context": project_context,
-                        "validation": validation_result
+                        "project_context": project_context
                     }
                     
                 except Exception as e:
@@ -341,8 +331,7 @@ class EnhancedRAGChatSystem:
                     return {
                         "result": f"生成代码时出错: {str(e)}",
                         "source_documents": [],
-                        "project_context": "",
-                        "validation": {"is_valid": False, "errors": [str(e)]}
+                        "project_context": ""
                     }
             
             def _build_context_prompt(self, project_context, docs):
@@ -353,15 +342,12 @@ class EnhancedRAGChatSystem:
                 
                 for i, doc in enumerate(docs, 1):
                     source_info = f"来源: {doc.metadata.get('source', '未知')}" if hasattr(doc, 'metadata') else ""
-                    context += f"示例 {i} {source_info}:\n{doc.page_content}\n{'='*50}\n"
+                    context += f"示例 {i} {source_info}:\n{doc.page_content[:500]}...\n{'='*50}\n"
                 
                 return context
             
             def _clean_query(self, query: str) -> str:
                 """清理查询中的重复内容"""
-                import re
-                
-                # 移除过多的重复要求
                 lines = query.split('\n')
                 cleaned_lines = []
                 required_keywords_seen = set()
@@ -373,7 +359,6 @@ class EnhancedRAGChatSystem:
                         
                     # 检测重复的"必须包含"模式
                     if "必须包含" in line_clean:
-                        # 提取关键内容
                         key_content = re.sub(r'.*必须包含', '', line_clean).strip()
                         if key_content and key_content not in required_keywords_seen:
                             cleaned_lines.append(line_clean)
@@ -383,9 +368,8 @@ class EnhancedRAGChatSystem:
                 
                 # 如果清理后内容太少，返回原始查询的重要部分
                 if len(cleaned_lines) < 2:
-                    # 提取原始查询中的关键行
                     important_lines = []
-                    for line in lines[:10]:  # 只取前10行避免重复
+                    for line in lines[:10]:
                         line_clean = line.strip()
                         if line_clean and "必须包含" not in line_clean:
                             important_lines.append(line_clean)
@@ -424,7 +408,6 @@ class EnhancedRAGChatSystem:
                 'query': query,
                 'response': result["result"],
                 'sources': len(result["source_documents"]),
-                'validation': result["validation"],
                 'timestamp': time.time()
             })
             
@@ -439,8 +422,7 @@ class EnhancedRAGChatSystem:
             return {
                 "result": f"生成回答时出错: {str(e)}", 
                 "source_documents": [],
-                "project_context": "",
-                "validation": {"is_valid": False, "errors": [str(e)]}
+                "project_context": ""
             }
     
     def get_vector_db_info(self):
@@ -457,21 +439,10 @@ class EnhancedRAGChatSystem:
     def search_project_files(self, keyword: str, max_results: int = 5):
         """在项目中搜索文件"""
         return self.project_learner.find_related_files(keyword, max_results)
-    
-    def __del__(self):
-        """析构函数释放资源"""
-        self.logger.info("清理系统资源...")
-        if hasattr(self, 'model'):
-            del self.model
-        if hasattr(self, 'vector_db'):
-            del self.vector_db
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
 
-# 在rag_enhanced.py中添加以下类和方法
 class StageAwareRAGSystem:
-    """阶段感知的RAG系统"""
+    """简化的阶段感知RAG系统"""
     
     def __init__(self, project_learner: AFSIMProjectLearner, vector_db, embeddings, model, tokenizer):
         self.project_learner = project_learner
@@ -482,163 +453,101 @@ class StageAwareRAGSystem:
         self.config = ConfigManager()
         self.logger = logging.getLogger(__name__)
         
-        # 阶段特定的检索器
+        # 阶段检索器缓存
         self.stage_retrievers = {}
-        
-    def build_stage_aware_retriever(self, stage_name: str):
-        """为特定阶段构建感知检索器"""
-        try:
-            # 获取阶段特定的上下文
-            stage_context = self.project_learner.get_stage_context(stage_name)
-            
-            # 阶段特定的检索参数
-            search_kwargs = {
-                "k": self.config.get(f'stages.{stage_name}.search_k', 8),
-                "score_threshold": self.config.get(f'stages.{stage_name}.score_threshold', 0.7)
-            }
-            
-            # 创建阶段感知的检索器
-            retriever = self.vector_db.as_retriever(search_kwargs=search_kwargs)
-            
-            # 增强检索器
-            enhanced_retriever = self._enhance_retriever_for_stage(retriever, stage_name, stage_context)
-            
-            self.stage_retrievers[stage_name] = enhanced_retriever
-            return enhanced_retriever
-            
-        except Exception as e:
-            self.logger.error(f"构建阶段 {stage_name} 检索器失败: {e}")
-            return self.vector_db.as_retriever(search_kwargs={"k": 6})
     
-    def _enhance_retriever_for_stage(self, retriever, stage_name: str, stage_context: str):
-        """为特定阶段增强检索器"""
+    def get_stage_retriever(self, stage_name: str):
+        """获取阶段感知检索器"""
+        if stage_name in self.stage_retrievers:
+            return self.stage_retrievers[stage_name]
         
-        class StageAwareRetriever:
-            def __init__(self, base_retriever, stage_name, stage_context, project_learner):
-                self.base_retriever = base_retriever
-                self.stage_name = stage_name
-                self.stage_context = stage_context
-                self.project_learner = project_learner
-                self.logger = logging.getLogger(__name__)
-            
-            def get_relevant_documents(self, query: str):
-                """获取相关文档，考虑阶段上下文"""
-                try:
-                    # 增强查询
-                    enhanced_query = self._enhance_query_for_stage(query)
-                    
-                    # 执行基础检索
-                    base_docs = self.base_retriever.get_relevant_documents(enhanced_query)
-                    
-                    # 过滤和排序文档
-                    filtered_docs = self._filter_docs_by_stage(base_docs)
-                    sorted_docs = self._sort_docs_by_relevance(filtered_docs, query)
-                    
-                    return sorted_docs
-                    
-                except Exception as e:
-                    self.logger.error(f"检索文档失败: {e}")
-                    return []
-            
-            def _enhance_query_for_stage(self, query: str) -> str:
-                """为特定阶段增强查询"""
-                stage_keywords = {
-                    "project_structure": ["项目结构", "文件夹", "组织", "布局"],
-                    "platforms": ["平台", "飞机", "车辆", "平台类型"],
-                    "weapons": ["武器", "导弹", "发射", "战斗部"],
-                    "sensors": ["传感器", "雷达", "探测", "跟踪"],
-                    "processors": ["处理器", "控制", "算法", "决策"],
-                    "scenarios": ["场景", "任务", "对抗", "环境"],
-                    "signatures": ["特征", "雷达反射", "红外", "光学"],
-                    "main_program": ["主程序", "入口", "初始化", "事件循环"]
-                }
-                
-                keywords = stage_keywords.get(self.stage_name, [])
-                enhanced = query
-                
-                # 添加阶段关键词
-                if keywords:
-                    enhanced += " " + " ".join(keywords[:3])
-                
-                # 添加阶段上下文中的关键词
-                context_words = re.findall(r'\b\w{4,}\b', self.stage_context)
-                if context_words:
-                    enhanced += " " + " ".join(context_words[:5])
-                
-                return enhanced
-            
-            def _filter_docs_by_stage(self, docs):
-                """根据阶段过滤文档"""
-                filtered = []
-                for doc in docs:
-                    if self._is_relevant_to_stage(doc):
-                        filtered.append(doc)
-                
-                # 如果过滤后文档太少，返回原始文档
-                if len(filtered) < 3:
-                    return docs[:5]
-                
-                return filtered[:8]  # 限制数量
-            
-            def _is_relevant_to_stage(self, doc) -> bool:
-                """检查文档是否与阶段相关"""
-                doc_text = doc.page_content.lower()
-                
-                # 阶段特定的关键词检查
-                stage_keywords_map = {
-                    "platforms": ["platform_type", "mover", "aircraft", "vehicle"],
-                    "weapons": ["weapon_type", "missile", "launch", "warhead"],
-                    "sensors": ["sensor_type", "radar", "detect", "track"],
-                    "processors": ["processor_type", "tasker", "controller", "algorithm"],
-                    "scenarios": ["scenario", "mission", "setup", "environment"],
-                    "signatures": ["signature", "rcs", "radar_cross_section", "emission"],
-                    "main_program": ["main", "include", "initialize", "event_loop"]
-                }
-                
-                keywords = stage_keywords_map.get(self.stage_name, [])
-                if keywords:
-                    return any(keyword in doc_text for keyword in keywords)
-                
-                return True
-            
-            def _sort_docs_by_relevance(self, docs, query: str):
-                """根据相关性排序文档"""
-                if len(docs) <= 1:
-                    return docs
-                
-                # 简单的相关性评分
-                scored_docs = []
-                query_lower = query.lower()
-                
-                for doc in docs:
-                    score = 0
-                    doc_text = doc.page_content.lower()
-                    
-                    # 查询词匹配
-                    query_words = set(re.findall(r'\b\w{3,}\b', query_lower))
-                    doc_words = set(re.findall(r'\b\w{3,}\b', doc_text))
-                    
-                    common_words = query_words.intersection(doc_words)
-                    score += len(common_words) * 2
-                    
-                    # 阶段关键词匹配
-                    if self.stage_name == "platforms" and "platform_type" in doc_text:
-                        score += 5
-                    elif self.stage_name == "weapons" and "weapon_type" in doc_text:
-                        score += 5
-                    
-                    # 元数据检查
-                    if hasattr(doc, 'metadata'):
-                        if "source" in doc.metadata and self.stage_name in doc.metadata["source"]:
-                            score += 3
-                    
-                    scored_docs.append((score, doc))
-                
-                # 按分数排序
-                scored_docs.sort(key=lambda x: x[0], reverse=True)
-                return [doc for _, doc in scored_docs]
+        # 获取阶段特定的检索参数
+        search_k = self.config.get(f'rag.stages.{stage_name}.search_k', 8)
         
-        return StageAwareRetriever(retriever, stage_name, stage_context, self.project_learner)
+        # 创建基础检索器
+        retriever = self.vector_db.as_retriever(
+            search_kwargs={"k": search_k}
+        )
+        
+        # 创建阶段感知的检索器包装器
+        stage_retriever = self._create_stage_retriever_wrapper(retriever, stage_name)
+        self.stage_retrievers[stage_name] = stage_retriever
+        
+        return stage_retriever
+    
+    def _create_stage_retriever_wrapper(self, base_retriever, stage_name: str):
+        """创建阶段感知检索器包装器"""
+        
+        def get_relevant_documents(query: str):
+            """增强查询并过滤文档"""
+            try:
+                # 增强查询
+                enhanced_query = self._enhance_query_for_stage(query, stage_name)
+                
+                # 执行基础检索
+                docs = base_retriever.get_relevant_documents(enhanced_query)
+                
+                # 过滤文档
+                filtered_docs = self._filter_docs_by_stage(docs, stage_name)
+                
+                return filtered_docs[:8]  # 限制返回数量
+                
+            except Exception as e:
+                self.logger.error(f"检索文档失败: {e}")
+                return []
+        
+        return get_relevant_documents
+    
+    def _enhance_query_for_stage(self, query: str, stage_name: str) -> str:
+        """为特定阶段增强查询"""
+        stage_keywords = {
+            "platforms": ["platform", "aircraft", "vehicle"],
+            "weapons": ["weapon", "missile", "launch"],
+            "sensors": ["sensor", "radar", "detect"],
+            "processors": ["processor", "algorithm", "control"],
+            "scenarios": ["scenario", "mission", "environment"],
+            "signatures": ["signature", "rcs", "emission"],
+            "main_program": ["main", "include", "initialize"],
+            "project_structure": ["project", "structure", "folder"]
+        }
+        
+        keywords = stage_keywords.get(stage_name, [])
+        enhanced = query
+        
+        if keywords:
+            enhanced += " " + " ".join(keywords[:2])
+        
+        return enhanced
+    
+    def _filter_docs_by_stage(self, docs, stage_name: str):
+        """根据阶段过滤文档"""
+        if not docs:
+            return []
+        
+        stage_keywords_map = {
+            "platforms": ["platform_type", "mover"],
+            "weapons": ["weapon_type", "missile"],
+            "sensors": ["sensor_type", "radar"],
+            "processors": ["processor_type", "tasker"],
+            "scenarios": ["scenario", "mission"],
+            "signatures": ["signature", "rcs"],
+            "main_program": ["main", "include"],
+        }
+        
+        keywords = stage_keywords_map.get(stage_name, [])
+        
+        if not keywords:
+            return docs
+        
+        filtered = []
+        for doc in docs:
+            doc_text = doc.page_content.lower()
+            if any(keyword in doc_text for keyword in keywords):
+                filtered.append(doc)
+        
+        # 如果过滤后文档太少，返回原始文档
+        return filtered[:5] if len(filtered) >= 3 else docs[:5]
+
 
 class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
     """增强的阶段感知RAG聊天系统"""
@@ -655,13 +564,9 @@ class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
             tokenizer=self.tokenizer
         )
         
-        # 阶段特定的QA链
+        # 阶段特定的QA链缓存
         self.stage_qa_chains = {}
-        
-        # 从demos中学习
-        self.logger.info("从demo项目中学习阶段模式...")
-        self.project_learner.learn_from_demos()
-        
+    
     def get_stage_aware_qa_chain(self, stage_name: str):
         """获取阶段感知的QA链"""
         if stage_name in self.stage_qa_chains:
@@ -670,14 +575,13 @@ class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
         self.logger.info(f"为阶段 {stage_name} 构建QA链...")
         
         # 获取阶段特定的检索器
-        retriever = self.stage_aware_system.build_stage_aware_retriever(stage_name)
+        retriever = self.stage_aware_system.get_stage_retriever(stage_name)
         
         # 创建阶段特定的LLM
         class StageAwareLLM:
-            def __init__(self, model, tokenizer, project_learner, stage_name):
+            def __init__(self, model, tokenizer, stage_name):
                 self.model = model
                 self.tokenizer = tokenizer
-                self.project_learner = project_learner
                 self.stage_name = stage_name
                 self.config = ConfigManager()
                 self.logger = logging.getLogger(__name__)
@@ -685,7 +589,7 @@ class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
             def __call__(self, prompt):
                 try:
                     # 阶段特定的生成参数
-                    stage_params = self.config.get(f'stages.{self.stage_name}', {})
+                    stage_params = self.config.get(f'rag.stages.{self.stage_name}', {})
                     max_tokens = stage_params.get('max_tokens', self.config.get('model.max_tokens', 1024))
                     temperature = stage_params.get('temperature', self.config.get('model.temperature', 0.2))
                     
@@ -732,10 +636,10 @@ class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
             def run(self, query: str, project_context: Dict = None) -> Dict[str, Any]:
                 try:
                     # 获取阶段特定的学习结果
-                    stage_context = self.project_learner.get_stage_context(self.stage_name, query)
+                    stage_context = self.project_learner.generate_context_prompt(query)
                     
                     # 检索相关文档
-                    docs = self.retriever.get_relevant_documents(query)
+                    docs = self.retriever(query)
                     
                     # 构建增强提示词
                     prompt = self._build_stage_prompt(query, stage_context, docs, project_context)
@@ -747,8 +651,7 @@ class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
                         "result": response,
                         "stage_name": self.stage_name,
                         "source_documents": docs,
-                        "stage_context": stage_context,
-                        "prompt_length": len(prompt)
+                        "stage_context": stage_context
                     }
                     
                 except Exception as e:
@@ -757,15 +660,14 @@ class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
                         "result": f"生成失败: {str(e)}",
                         "stage_name": self.stage_name,
                         "source_documents": [],
-                        "stage_context": "",
-                        "prompt_length": 0
+                        "stage_context": ""
                     }
             
             def _build_stage_prompt(self, query: str, stage_context: str, docs: List, project_context: Dict = None) -> str:
                 """构建阶段特定的提示词"""
                 # 文档内容
                 doc_content = ""
-                for i, doc in enumerate(docs[:4], 1):  # 限制文档数量
+                for i, doc in enumerate(docs[:4], 1):
                     doc_content += f"示例文档 {i}:\n{doc.page_content[:500]}...\n\n"
                 
                 # 项目上下文
@@ -808,7 +710,7 @@ class EnhancedStageAwareRAGChatSystem(EnhancedRAGChatSystem):
                 return prompt
         
         # 创建LLM实例
-        llm = StageAwareLLM(self.model, self.tokenizer, self.project_learner, stage_name)
+        llm = StageAwareLLM(self.model, self.tokenizer, stage_name)
         
         # 创建QA链
         qa_chain = StageAwareQAChain(llm, retriever, self.project_learner, stage_name)
