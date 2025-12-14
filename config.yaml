@@ -1,393 +1,81 @@
 # config.yaml
+system:
+  name: "AFSIM RAG 代码生成系统"
+  version: "1.0.0"
+  debug: true
+  log_level: "INFO"
+
 model:
-  path: "D:/Qwen/Qwen/Qwen3-4B"
+  path: "D:/HuangJZh/Qwen/Qwen3-4B"
+  embedding_model: "BAAI/bge-small-zh-v1.5"
+  device: "auto"  # auto, cuda, cpu
+  quantization: "4bit"  # 4bit, 8bit, none
+  
+  # 生成参数
   max_tokens: 1024
-  temperature: 0.1
+  temperature: 0.3
   top_p: 0.9
   top_k: 50
-  repetition_penalty: 1.2
+  repetition_penalty: 1.1
+  do_sample: true
+  
+  # 模型加载参数
+  torch_dtype: "float16"  # float16, float32, bfloat16
+  trust_remote_code: true
 
-vector_db:
+rag:
+  # 向量数据库配置
+  chroma_db_path: "./chroma_db"
+  collection_name: "afsim_tutorials"
+  
+  # 文档处理配置
+  docs_folder: "tutorials"
   chunk_size: 350
   chunk_overlap: 100
   smart_chunking: true
   semantic_threshold: 0.8
-  persist_dir: "vector_db_afsim_enhanced"
-  search_k: 4
-  batch_size: 2000
-
-project:
-  root: "D:/Qwen/Qwen3/afsim_ai_coder/demos"
-  base_libraries: ["base_types", "base_types_nx"]
-  max_file_size_mb: 5
-  skip_patterns: ["(1)", "(2)", "副本", "copy", "temp", "备份"]
-  encodings: ["utf-8", "gbk", "gb2312", "gb18030", "latin1", "cp1252"]
   
-  # 新增：阶段学习配置
-  stage_learning:
-    demos_folder: "demos"
-    min_examples_per_stage: 2
-    max_examples_per_stage: 10
-    extract_pattern_threshold: 0.7
-    save_learning_results: true
-    learning_results_path: "stage_learning_results.json"
+  # 检索配置
+  search_top_k: 5
+  rerank_top_k: 3
+  score_threshold: 0.5
+  
+  # 批处理配置
+  batch_size: 2000
+  embedding_batch_size: 32
+
+web:
+  # Web界面配置
+  server_name: "0.0.0.0"
+  server_port: 7860
+  share: false
+  debug: true
+  theme: "soft"
+  
+  # 界面配置
+  chat_height: 500
+  max_history: 20
+  auto_scroll: true
+
+paths:
+  # 路径配置
+  tutorials_dir: "tutorials"
+  chroma_db_dir: "./chroma_db"
+  logs_dir: "./logs"
+  exports_dir: "./exports"
+  cache_dir: "./cache"
+
+performance:
+  # 性能配置
+  use_cache: true
+  cache_ttl: 3600  # 秒
+  max_concurrent: 4
+  memory_limit: "4GB"  # 内存限制
 
 logging:
+  # 日志配置
   level: "INFO"
-  file: "afsim_coder.log"
-
-embedding:
-  model: "BAAI/bge-small-zh-v1.5"
-
-# 新增：阶段感知RAG配置
-rag:
-  # 通用RAG参数
-  generic:
-    search_k: 6
-    score_threshold: 0.65
-    max_source_length: 4  # 最多使用4个源文档
-    
-  # 阶段特定的RAG参数
-  stages:
-    project_structure:
-      search_k: 6
-      score_threshold: 0.6
-      max_tokens: 500
-      temperature: 0.1
-      context_boost: 1.2
-      use_learned_patterns: true
-      
-    main_program:
-      search_k: 8
-      score_threshold: 0.7
-      max_tokens: 1000
-      temperature: 0.2
-      context_boost: 1.3
-      use_learned_patterns: true
-      
-    platforms:
-      search_k: 10
-      score_threshold: 0.75
-      max_tokens: 1200
-      temperature: 0.15
-      context_boost: 1.4
-      use_learned_patterns: true
-      filter_keywords: ["platform_type", "mover", "aircraft", "vehicle"]
-      
-    scenarios:
-      search_k: 8
-      score_threshold: 0.7
-      max_tokens: 1000
-      temperature: 0.15
-      context_boost: 1.3
-      use_learned_patterns: true
-      filter_keywords: ["scenario", "mission", "setup", "environment"]
-      
-    processors:
-      search_k: 8
-      score_threshold: 0.7
-      max_tokens: 900
-      temperature: 0.15
-      context_boost: 1.3
-      use_learned_patterns: true
-      filter_keywords: ["processor_type", "tasker", "controller", "algorithm"]
-      
-    sensors:
-      search_k: 8
-      score_threshold: 0.7
-      max_tokens: 700
-      temperature: 0.15
-      context_boost: 1.3
-      use_learned_patterns: true
-      filter_keywords: ["sensor_type", "radar", "detect", "track"]
-      
-    weapons:
-      search_k: 8
-      score_threshold: 0.7
-      max_tokens: 700
-      temperature: 0.15
-      context_boost: 1.3
-      use_learned_patterns: true
-      filter_keywords: ["weapon_type", "missile", "launch", "warhead"]
-      
-    signatures:
-      search_k: 6
-      score_threshold: 0.65
-      max_tokens: 600
-      temperature: 0.1
-      context_boost: 1.2
-      use_learned_patterns: true
-      filter_keywords: ["signature", "rcs", "radar_cross_section", "emission"]
-
-# 分阶段生成配置
-generation:
-  strategy: "multi_stage"
-  enable_stage_aware_rag: true
-  
-  # 阶段定义
-  stages:
-    - name: "project_structure"
-      description: "分析需求并规划项目结构"
-      max_tokens: 500
-      temperature: 0.1
-      depends_on: []
-      output_patterns: ["project_structure.json", "README.md"]
-      use_rag: true
-      rag_stage: "project_structure"
-      
-    - name: "main_program"
-      description: "生成主程序文件"
-      max_tokens: 1000
-      temperature: 0.2
-      depends_on: ["project_structure"]
-      output_patterns: ["main.txt"]
-      use_rag: true
-      rag_stage: "main_program"
-      
-    - name: "platforms"
-      description: "生成平台定义文件"
-      max_tokens: 1200
-      temperature: 0.15
-      depends_on: ["project_structure"]
-      output_patterns: ["platforms/*.txt"]
-      use_rag: true
-      rag_stage: "platforms"
-      
-    - name: "scenarios"
-      description: "生成场景文件"
-      max_tokens: 1000
-      temperature: 0.15
-      depends_on: ["project_structure", "platforms"]
-      output_patterns: ["scenarios/*.txt"]
-      use_rag: true
-      rag_stage: "scenarios"
-      
-    - name: "processors"
-      description: "生成处理器文件"
-      max_tokens: 900
-      temperature: 0.15
-      depends_on: ["project_structure", "platforms"]
-      output_patterns: ["processors/*.txt"]
-      use_rag: true
-      rag_stage: "processors"
-      
-    - name: "sensors"
-      description: "生成传感器文件"
-      max_tokens: 700
-      temperature: 0.15
-      depends_on: ["project_structure", "platforms"]
-      output_patterns: ["sensors/*.txt"]
-      use_rag: true
-      rag_stage: "sensors"
-      
-    - name: "weapons"
-      description: "生成武器文件"
-      max_tokens: 700
-      temperature: 0.15
-      depends_on: ["project_structure", "platforms"]
-      output_patterns: ["weapons/*.txt"]
-      use_rag: true
-      rag_stage: "weapons"
-      
-    - name: "signatures"
-      description: "生成特征信号文件"
-      max_tokens: 600
-      temperature: 0.1
-      depends_on: ["project_structure", "platforms"]
-      output_patterns: ["signatures/*.txt"]
-      use_rag: true
-      rag_stage: "signatures"
-  
-  # 输出配置
-  output:
-    base_dir: "generated_projects"
-    create_folders: true
-    generate_readme: true
-    include_examples: true
-    include_learning_context: true
-    
-  # 验证配置
-  validation:
-    check_dependencies: true
-    verify_imports: true
-    test_scenarios: false
-    validate_code_patterns: true
-    
-  # 性能优化
-  optimization:
-    enable_cache: true
-    cache_size: 100
-    parallel_stages: false  # 注意：依赖关系的阶段不能并行
-    timeout_per_stage: 300  # 每个阶段最多300秒
-    retry_failed_stages: true
-    max_retries: 2
-
-# 学习模块配置
-learning:
-  # 模式提取配置
-  pattern_extraction:
-    enable: true
-    min_pattern_length: 3
-    max_pattern_length: 50
-    pattern_confidence_threshold: 0.6
-    save_patterns: true
-    patterns_path: "learned_patterns.json"
-    
-  # 最佳实践提取
-  best_practices:
-    enable: true
-    min_occurrences: 2  # 至少在2个项目中出现
-    confidence_threshold: 0.7
-    
-  # 导入模式学习
-  import_patterns:
-    enable: true
-    extract_common_imports: true
-    max_imports_per_file: 10
-    
-  # 文件结构学习
-  file_structure:
-    enable: true
-    analyze_folder_hierarchy: true
-    learn_naming_conventions: true
-
-# 智能检索配置
-retrieval:
-  # 查询增强
-  query_enhancement:
-    enable: true
-    add_stage_keywords: true
-    add_learned_patterns: true
-    max_enhanced_words: 5
-    
-  # 文档过滤
-  document_filtering:
-    enable: true
-    stage_specific_filtering: true
-    relevance_threshold: 0.5
-    max_filtered_docs: 10
-    
-  # 文档排序
-  document_ranking:
-    enable: true
-    use_semantic_similarity: true
-    use_stage_relevance: true
-    use_recency_bias: false  # AFSIM代码通常不随时间变化
-    
-  # 多样性控制
-  diversity:
-    enable: true
-    max_similar_docs: 2
-    ensure_source_diversity: true
-
-# 提示词工程
-prompt_engineering:
-  # 模板配置
-  templates:
-    stage_context_template: |
-      === {stage_name.upper()} 阶段学习总结 ===
-      从 {example_count} 个demo项目中学到的最佳实践:
-      {best_practices}
-      
-      常用导入模式:
-      {import_patterns}
-      
-      常见代码模式:
-      {code_patterns}
-    
-    generation_template: |
-      {stage_instruction}
-      
-      阶段学习总结:
-      {stage_context}
-      
-      相关代码示例:
-      {examples}
-      
-      当前项目上下文:
-      {project_context}
-      
-      用户需求: {query}
-      
-      请基于以上信息生成完整的{stage_name}阶段代码。
-      输出要求:
-      1. 只输出AFSIM代码，不添加额外解释
-      2. 确保代码完整性和正确性
-      3. 遵循示例中的最佳实践
-      
-      生成代码:
-      
-  # 指令模板
-  instructions:
-    project_structure: "你需要分析AFSIM项目需求并规划项目结构。输出应该是一个清晰的JSON格式结构，包含必要的文件夹和文件规划。"
-    main_program: "你需要生成AFSIM主程序文件。确保包含必要的导入语句、初始化代码、事件循环和输出配置。"
-    platforms: "你需要生成AFSIM平台定义。确保包含完整的平台类型定义、物理参数、组件配置和行为定义。"
-    weapons: "你需要生成AFSIM武器定义。包括武器类型、性能参数、制导系统和战斗部配置。"
-    sensors: "你需要生成AFSIM传感器定义。包含传感器类型、探测参数、工作模式和数据输出格式。"
-    processors: "你需要生成AFSIM处理器定义。包括处理器类型、输入输出接口、处理算法和配置参数。"
-    scenarios: "你需要生成AFSIM场景定义。包含场景描述、平台配置、环境设置和事件序列。"
-    signatures: "你需要生成AFSIM特征信号定义。包括特征类型、RCS值、角度依赖性和辐射特性。"
-
-# 监控和报告
-monitoring:
-  enable: true
-  log_performance: true
-  log_quality_metrics: true
-  
-  # 性能指标
-  metrics:
-    track_response_time: true
-    track_token_usage: true
-    track_rag_effectiveness: true
-    
-  # 报告生成
-  reporting:
-    generate_stage_reports: true
-    generate_project_summary: true
-    save_quality_metrics: true
-    
-  # 警报
-  alerts:
-    enable: false
-    threshold_response_time: 30  # 30秒
-    threshold_error_rate: 0.1    # 10%
-
-# 系统配置
-system:
-  # 资源管理
-  resources:
-    max_memory_usage_mb: 4096
-    enable_memory_optimization: true
-    cleanup_interval_seconds: 300
-    
-  # 并发控制
-  concurrency:
-    max_threads: 4
-    max_vector_db_operations: 2
-    
-  # 缓存配置
-  cache:
-    enable_query_cache: true
-    cache_ttl_seconds: 3600
-    max_cache_size_mb: 100
-    
-  # 故障恢复
-  recovery:
-    enable_auto_recovery: true
-    save_checkpoints: true
-    checkpoint_interval_stages: 3
-
-# 调试配置
-debug:
-  enable: false
-  log_raw_queries: false
-  log_retrieved_docs: false
-  log_generation_prompts: false
-  log_stage_transitions: false
-  
-  # 详细日志级别
-  verbose_logging:
-    stage_learning: false
-    rag_retrieval: false
-    generation_process: false
-    file_extraction: false
+  format: "[{time:YYYY-MM-DD HH:mm:ss}] {level} | {message}"
+  file: "afsim_rag.log"
+  max_size: "10MB"
+  backup_count: 5
