@@ -358,57 +358,54 @@ class EnhancedRAGChatSystem:
                 return context
             
             def _clean_query(self, query: str) -> str:
-                """清理查询中的重复内容 - 增强版"""
+                """清理查询中的重复内容"""
                 import re
                 
-                # 移除所有重复的要求行
+                # 移除过多的重复要求
                 lines = query.split('\n')
-                unique_lines = []
-                seen_patterns = set()
+                cleaned_lines = []
+                required_keywords_seen = set()
                 
                 for line in lines:
                     line_clean = line.strip()
                     if not line_clean:
                         continue
-                    
-                    # 检查是否是重复模式
-                    pattern_key = re.sub(r'\d+', '#', line_clean)  # 将数字替换为通配符
-                    if pattern_key in seen_patterns:
-                        continue
-                    
-                    seen_patterns.add(pattern_key)
-                    
-                    # 简化"必须包含"模式
+                        
+                    # 检测重复的"必须包含"模式
                     if "必须包含" in line_clean:
-                        # 只保留关键内容
-                        key_content = re.sub(r'.*必须包含', '包含', line_clean)
-                        unique_lines.append(key_content)
+                        # 提取关键内容
+                        key_content = re.sub(r'.*必须包含', '', line_clean).strip()
+                        if key_content and key_content not in required_keywords_seen:
+                            cleaned_lines.append(line_clean)
+                            required_keywords_seen.add(key_content)
                     else:
-                        unique_lines.append(line_clean)
+                        cleaned_lines.append(line_clean)
                 
-                # 限制总长度，避免过长
-                cleaned = '\n'.join(unique_lines[:10])  # 最多10行
+                # 如果清理后内容太少，返回原始查询的重要部分
+                if len(cleaned_lines) < 2:
+                    # 提取原始查询中的关键行
+                    important_lines = []
+                    for line in lines[:10]:  # 只取前10行避免重复
+                        line_clean = line.strip()
+                        if line_clean and "必须包含" not in line_clean:
+                            important_lines.append(line_clean)
+                    return "\n".join(important_lines[:5])
                 
-                return cleaned
+                return "\n".join(cleaned_lines[:20])  # 限制长度
             
             def _build_generation_prompt(self, context, query):
                 """构建生成提示词"""
                 cleaned_query = self._clean_query(query)
 
-                return f"""你是一个AFSIM代码生成专家，专门生成准确、完整的代码。
-
-严格遵循以下规则：
-1. **只输出**请求的代码或JSON，不添加任何解释、说明、注释
-2. **禁止**重复相同的代码块
-3. **禁止**包含"现在，请根据上述要求..."、"以下是..."等引导性文字
-4. **确保**输出格式正确、完整
-
+                return f"""你是一个AFSIM代码生成专家，熟悉整个项目结构和基础库的使用。
 {context}
-用户需求: {cleaned_query}
-
-基于以上项目结构和相关代码示例，直接生成准确、完整的AFSIM代码或JSON结构。
-
-输出："""
+ 用户需求: {query}
+请基于以上项目结构和相关代码示例，直接生成准确、完整的AFSIM代码。
+ 禁止:
+不要添加解释性文字
+不要重复相同的内容
+不要输出不完整的代码块
+请生成完整的AFSIM代码:"""
         
         return EnhancedCodeGenerationChain(
             llm=CustomQwenLLM(self.model, self.tokenizer, self.project_learner),

@@ -1,7 +1,6 @@
 # config.yaml
 model:
-  path: "D:/Qwen/Qwen/Qwen3-4B"
-  # path: "D:/HuangJZh/Qwen/Qwen3-4B"
+  path: "D:/HuangJZh/Qwen/Qwen3-4B"
   max_tokens: 1024
   temperature: 0.3
   top_p: 0.9
@@ -18,8 +17,7 @@ vector_db:
   batch_size: 2000
 
 project:
-  # root: "D:/HuangJZh/Qwen3/afsim_ai_coder/demos"
-  root: "D:/Qwen/Qwen3/afsim_ai_coder/demos"
+  root: "D:/HuangJZh/Qwen3/afsim_ai_coder/demos"
   base_libraries: ["base_types", "base_types_nx"]
   max_file_size_mb: 5
   skip_patterns: ["(1)", "(2)", "副本", "copy", "temp", "备份"]
@@ -54,7 +52,7 @@ rag:
     project_structure:
       search_k: 6
       score_threshold: 0.6
-      max_tokens: 1024
+      max_tokens: 500
       temperature: 0.1
       context_boost: 1.2
       use_learned_patterns: true
@@ -62,7 +60,7 @@ rag:
     main_program:
       search_k: 8
       score_threshold: 0.7
-      max_tokens: 1024
+      max_tokens: 1000
       temperature: 0.2
       context_boost: 1.3
       use_learned_patterns: true
@@ -70,7 +68,7 @@ rag:
     platforms:
       search_k: 10
       score_threshold: 0.75
-      max_tokens: 1024
+      max_tokens: 1200
       temperature: 0.15
       context_boost: 1.4
       use_learned_patterns: true
@@ -79,7 +77,7 @@ rag:
     scenarios:
       search_k: 8
       score_threshold: 0.7
-      max_tokens: 1024
+      max_tokens: 1000
       temperature: 0.15
       context_boost: 1.3
       use_learned_patterns: true
@@ -88,7 +86,7 @@ rag:
     processors:
       search_k: 8
       score_threshold: 0.7
-      max_tokens: 1024
+      max_tokens: 900
       temperature: 0.15
       context_boost: 1.3
       use_learned_patterns: true
@@ -97,7 +95,7 @@ rag:
     sensors:
       search_k: 8
       score_threshold: 0.7
-      max_tokens: 1024
+      max_tokens: 700
       temperature: 0.15
       context_boost: 1.3
       use_learned_patterns: true
@@ -106,7 +104,7 @@ rag:
     weapons:
       search_k: 8
       score_threshold: 0.7
-      max_tokens: 1024
+      max_tokens: 700
       temperature: 0.15
       context_boost: 1.3
       use_learned_patterns: true
@@ -115,7 +113,7 @@ rag:
     signatures:
       search_k: 6
       score_threshold: 0.65
-      max_tokens: 1024
+      max_tokens: 600
       temperature: 0.1
       context_boost: 1.2
       use_learned_patterns: true
@@ -130,7 +128,7 @@ generation:
   stages:
     - name: "project_structure"
       description: "分析需求并规划项目结构"
-      max_tokens: 1024
+      max_tokens: 500
       temperature: 0.1
       depends_on: []
       output_patterns: ["project_structure.json", "README.md"]
@@ -139,7 +137,7 @@ generation:
       
     - name: "main_program"
       description: "生成主程序文件"
-      max_tokens: 1024
+      max_tokens: 1000
       temperature: 0.2
       depends_on: ["project_structure"]
       output_patterns: ["main.txt"]
@@ -148,7 +146,7 @@ generation:
       
     - name: "platforms"
       description: "生成平台定义文件"
-      max_tokens: 1024
+      max_tokens: 1200
       temperature: 0.15
       depends_on: ["project_structure"]
       output_patterns: ["platforms/*.txt"]
@@ -157,7 +155,7 @@ generation:
       
     - name: "scenarios"
       description: "生成场景文件"
-      max_tokens: 1024
+      max_tokens: 1000
       temperature: 0.15
       depends_on: ["project_structure", "platforms"]
       output_patterns: ["scenarios/*.txt"]
@@ -166,7 +164,7 @@ generation:
       
     - name: "processors"
       description: "生成处理器文件"
-      max_tokens: 1024
+      max_tokens: 900
       temperature: 0.15
       depends_on: ["project_structure", "platforms"]
       output_patterns: ["processors/*.txt"]
@@ -175,7 +173,7 @@ generation:
       
     - name: "sensors"
       description: "生成传感器文件"
-      max_tokens: 1024
+      max_tokens: 700
       temperature: 0.15
       depends_on: ["project_structure", "platforms"]
       output_patterns: ["sensors/*.txt"]
@@ -184,7 +182,7 @@ generation:
       
     - name: "weapons"
       description: "生成武器文件"
-      max_tokens: 1024
+      max_tokens: 700
       temperature: 0.15
       depends_on: ["project_structure", "platforms"]
       output_patterns: ["weapons/*.txt"]
@@ -193,7 +191,7 @@ generation:
       
     - name: "signatures"
       description: "生成特征信号文件"
-      max_tokens: 1024
+      max_tokens: 600
       temperature: 0.1
       depends_on: ["project_structure", "platforms"]
       output_patterns: ["signatures/*.txt"]
@@ -215,6 +213,15 @@ generation:
     test_scenarios: false
     validate_code_patterns: true
     
+  # 性能优化
+  optimization:
+    enable_cache: true
+    cache_size: 100
+    parallel_stages: false  # 注意：依赖关系的阶段不能并行
+    timeout_per_stage: 300  # 每个阶段最多300秒
+    retry_failed_stages: true
+    max_retries: 2
+
 # 学习模块配置
 learning:
   # 模式提取配置

@@ -268,91 +268,88 @@ class MultiStageGenerator:
         self.stage_results = {}
 
     def _execute_stage(self, stage_info: Dict, query: str, output_dir: str) -> Dict:
-        """执行单个生成阶段"""
+        """执行单个生成阶段 - 使用阶段感知RAG"""
         stage_name = stage_info["name"]
         stage_max_tokens = stage_info.get("max_tokens", 1024)
         stage_temperature = stage_info.get("temperature", 0.3)
         
         try:
-            print(f"\n🔧 开始执行阶段: {stage_name}")
-            print(f"   阶段描述: {stage_info.get('description', '')}")
-            print(f"   生成参数: max_tokens={stage_max_tokens}, temperature={stage_temperature}")
+            self.logger.info(f"执行阶段 {stage_name}，使用阶段感知RAG...")
             
-            # 构建阶段特定的提示词
-            prompt = self._build_stage_prompt(stage_info, query)
+            # 构建阶段特定的查询
+            stage_query = self._build_stage_query(stage_info, query)
             
-            print(f"📝 提示词长度: {len(prompt)} 字符")
-            print(f"📝 提示词前200字符:\n{prompt[:200]}...")
-            
-            # 生成内容
-            start_gen_time = time.time()
-            
-            # 检查是否有生成参数的方法
-            if hasattr(self.chat_system, 'generate_enhanced_response_with_params'):
-                print("   使用带参数的生成方法...")
-                result = self.chat_system.generate_enhanced_response_with_params(
-                    prompt, 
-                    max_tokens=stage_max_tokens,
-                    temperature=stage_temperature
+            # 检查是否有阶段感知的RAG系统
+            if hasattr(self.chat_system, 'generate_stage_response'):
+                # 使用阶段感知RAG生成
+                result = self.chat_system.generate_stage_response(
+                    stage_name=stage_name,
+                    query=stage_query,
+                    project_context=self.project_context
                 )
-            elif hasattr(self.chat_system, 'generate_enhanced_response'):
-                print("   使用增强响应生成方法...")
-                result = self.chat_system.generate_enhanced_response(prompt)
+                
+                if not result or "result" not in result:
+                    return {
+                        "success": False,
+                        "error": "生成结果为空"
+                    }
+                
+                generated_content = result["result"]
+                
+                # 从结果中提取额外信息
+                if "stage_context" in result:
+                    self.logger.debug(f"阶段 {stage_name} 上下文: {result['stage_context'][:200]}...")
+                
             else:
-                print("   使用默认生成方法...")
-                # 尝试直接调用
-                result = self.chat_system(prompt)
-            
-            gen_duration = time.time() - start_gen_time
-            print(f"✅ 生成完成，耗时: {gen_duration:.2f}秒")
-            
-            if not result or "result" not in result:
-                error_msg = "生成结果为空"
-                print(f"❌ {error_msg}")
-                return {
-                    "success": False,
-                    "error": error_msg
+                # 回退到原来的方法
+                prompt = self._build_stage_prompt(stage_info, query)
+                generation_params = {
+                    "max_tokens": stage_max_tokens,
+                    "temperature": stage_temperature
                 }
-            
-            # 解析生成的内容
-            generated_content = result["result"]
-            
-            print(f"📝 阶段 {stage_name} 生成内容长度: {len(generated_content)} 字符")
-            print(f"📝 生成内容前300字符:\n{generated_content[:300]}...")
+                
+                if hasattr(self.chat_system, 'generate_enhanced_response_with_params'):
+                    rag_result = self.chat_system.generate_enhanced_response_with_params(
+                        prompt, 
+                        **generation_params
+                    )
+                else:
+                    rag_result = self.chat_system.generate_enhanced_response(prompt)
+                
+                if not rag_result or "result" not in rag_result:
+                    return {
+                        "success": False,
+                        "error": "生成结果为空"
+                    }
+                
+                generated_content = rag_result["result"]
             
             # 提取文件内容
-            extract_start = time.time()
             files = self._extract_files_from_content(generated_content, stage_info, output_dir)
-            extract_duration = time.time() - extract_start
-            
-            print(f"📄 阶段 {stage_name} 提取到 {len(files)} 个文件，耗时: {extract_duration:.2f}秒")
             
             # 保存文件
-            save_start = time.time()
             output_files = self._save_generated_files(files, output_dir)
-            save_duration = time.time() - save_start
             
             # 更新上下文
             context = self._extract_context_from_content(generated_content)
+            self.project_context.update(context)
             
-            print(f"💾 保存文件完成，耗时: {save_duration:.2f}秒")
+            # 记录阶段特定的学习
+            if hasattr(self.chat_system, 'project_learner') and stage_name in self.chat_system.project_learner.stage_learning_results:
+                stage_learning = self.chat_system.project_learner.stage_learning_results[stage_name]
+                self.logger.info(f"阶段 {stage_name} 使用了 {len(stage_learning.file_examples)} 个学习示例")
             
             return {
                 "success": True,
                 "output_files": output_files,
                 "context": context,
-                "raw_content": generated_content[:200] + "..." if len(generated_content) > 200 else generated_content,
+                "raw_content": generated_content[:500] + "..." if len(generated_content) > 500 else generated_content,
                 "stage_name": stage_name,
-                "generation_params": {
-                    "max_tokens": stage_max_tokens,
-                    "temperature": stage_temperature
-                }
+                "method": "stage_aware_rag"
             }
             
         except Exception as e:
             self.logger.error(f"执行阶段 {stage_name} 失败: {e}")
-            import traceback
-            traceback.print_exc()
             return {
                 "success": False,
                 "error": str(e)
@@ -384,10 +381,6 @@ class MultiStageGenerator:
             print("🔍 分析项目需求...")
             project_analysis = self.project_analyzer.analyze_requirements(query)
             
-            print(f"✅ 需求分析完成:")
-            print(f"   检测到组件: {project_analysis['components']}")
-            print(f"   生成阶段: {len(project_analysis['stages'])} 个")
-            
             # 2. 准备输出目录
             if not output_dir:
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -397,7 +390,6 @@ class MultiStageGenerator:
                 )
             
             os.makedirs(output_dir, exist_ok=True)
-            print(f"📁 输出目录: {output_dir}")
             
             # 3. 保存项目分析
             self.current_project = {
@@ -415,8 +407,6 @@ class MultiStageGenerator:
             stages = project_analysis["stages"]
             total_stages = len(stages)
             
-            print(f"\n🚀 开始执行 {total_stages} 个生成阶段...")
-            
             for idx, stage_info in enumerate(stages, 1):
                 stage_name = stage_info["name"]
                 stage_desc = stage_info["description"]
@@ -424,9 +414,8 @@ class MultiStageGenerator:
                 stage_temperature = stage_info.get("temperature", 0.3)
                 
                 self.current_stage = stage_name
-                print(f"\n{'='*60}")
-                print(f"📋 阶段 {idx}/{total_stages}: {stage_name}")
-                print(f"   描述: {stage_desc}")
+                self.logger.info(f"开始阶段 {idx}/{total_stages}: {stage_name} - {stage_desc} (tokens: {stage_max_tokens}, temp: {stage_temperature})")
+                print(f"\n📋 阶段 {idx}/{total_stages}: {stage_desc}")
                 print(f"   参数: max_tokens={stage_max_tokens}, temperature={stage_temperature}")
                 
                 # 检查依赖
@@ -451,27 +440,23 @@ class MultiStageGenerator:
                 }
                 
                 if result["success"]:
-                    # 去重添加文件
-                    for file_path in result.get("output_files", []):
-                        if file_path not in self.generated_files:
-                            self.generated_files.append(file_path)
-                    
+                    self.generated_files.extend(result["output_files"])
                     self.project_context.update(result.get("context", {}))
                     self.stage_results[stage_name] = result
                     print(f"✅ 阶段 {stage_name} 完成 ({stage_duration:.1f}秒)")
-                    if result.get("output_files"):
-                        print(f"   生成文件: {', '.join(result['output_files'])}")
                 else:
                     self.logger.error(f"阶段 {stage_name} 失败: {result.get('error')}")
                     print(f"❌ 阶段 {stage_name} 失败: {result.get('error')}")
+                
+                # 显示生成的文件
+                if result.get("output_files"):
+                    print(f"   生成文件: {', '.join(result['output_files'])}")
             
             # 5. 生成项目报告
             report = self._generate_project_report()
             
             self.logger.info(f"项目生成完成: {output_dir}")
-            print(f"\n{'='*60}")
-            print(f"🎉 项目生成完成！位置: {output_dir}")
-            print(f"📄 总共生成 {len(self.generated_files)} 个文件")
+            print(f"\n🎉 项目生成完成！位置: {output_dir}")
             
             return {
                 "success": True,
@@ -483,8 +468,6 @@ class MultiStageGenerator:
             
         except Exception as e:
             self.logger.error(f"项目生成失败: {e}")
-            import traceback
-            traceback.print_exc()
             return {
                 "success": False,
                 "error": str(e)
@@ -514,59 +497,258 @@ class MultiStageGenerator:
         
         return True
     
+    def _execute_stage(self, stage_info: Dict, query: str, output_dir: str) -> Dict:
+        """执行单个生成阶段"""
+        stage_name = stage_info["name"]
+        stage_max_tokens = stage_info.get("max_tokens", 1024)
+        stage_temperature = stage_info.get("temperature", 0.3)
+        
+        try:
+            # 构建阶段特定的提示词
+            prompt = self._build_stage_prompt(stage_info, query)
+            
+            # 设置生成参数
+            generation_params = {
+                "max_tokens": stage_max_tokens,
+                "temperature": stage_temperature
+            }
+            
+            # 生成内容（假设chat_system支持传入参数）
+            if hasattr(self.chat_system, 'generate_enhanced_response_with_params'):
+                result = self.chat_system.generate_enhanced_response_with_params(
+                    prompt, 
+                    **generation_params
+                )
+            else:
+                # 回退到默认方法
+                result = self.chat_system.generate_enhanced_response(prompt)
+            
+            if not result or "result" not in result:
+                return {
+                    "success": False,
+                    "error": "生成结果为空"
+                }
+            
+            # 解析生成的内容
+            generated_content = result["result"]
+            
+            # 提取文件内容
+            files = self._extract_files_from_content(generated_content, stage_info, output_dir)
+            
+            # 保存文件
+            output_files = self._save_generated_files(files, output_dir)
+            
+            # 更新上下文
+            context = self._extract_context_from_content(generated_content)
+            
+            return {
+                "success": True,
+                "output_files": output_files,
+                "context": context,
+                "raw_content": generated_content,
+                "stage_name": stage_name,
+                "generation_params": generation_params
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
     def _build_stage_prompt(self, stage_info: Dict, query: str) -> str:
         """构建阶段特定的提示词"""
         stage_name = stage_info["name"]
+        stage_desc = stage_info["description"]
         
-        # 更简洁明确的阶段特定提示词
+        # 使用配置中的参数构建提示词
         stage_instructions = {
-            "project_structure": f"""生成项目结构JSON。
+            "project_structure": f"""分析AFSIM项目需求并规划项目结构。
 
-需求：{query}
+原始需求：{query}
 
-输出JSON格式：
-{{
-  "components": ["平台组件列表"],
-  "file_structure": {{
-    "folders": ["文件夹列表"],
-    "files": ["文件列表"]
-  }},
-  "main_platform": "主要平台名称",
-  "scenario_description": "场景描述"
-}}
+输出一个JSON格式的项目结构规划，包含以下信息：
+1. 需要的组件列表
+2. 建议的文件结构
+3. 主要平台名称
+4. 主要场景描述
 
-只输出JSON，不要任何其他文字。""",
+**只输出AFSIM代码格式**。""",
             
-            "main_program": f"""生成AFSIM主程序文件。
+            "signatures": f"""生成AFSIM特征信号文件。
 
-需求：{query}
+基于项目需求：{query}
+项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
 
-输出有效的AFSIM代码，包含：
-1. include语句
-2. 平台定义
-3. 场景定义
-4. 输出配置
-5. 仿真控制
+需要生成以下特征信号定义：
+1. 雷达特征（radar_signature）
+2. 红外特征（infrared_signature）  
+3. 光学特征（optical_signature）
 
-只输出AFSIM代码，不要任何解释:""",
+每个特征信号文件应该包含：
+1. 特征类型定义
+2. RCS值或辐射强度
+3. 角度依赖性
+4. 双基地特征（如适用）
+
+为每种特征信号生成单独的.txt文件。
+使用以下格式分隔不同文件：
+=== Feature_Name_signature.txt ===
+[特征信号文件内容]
+
+开始生成：""",
             
-            "platforms": f"""生成AFSIM平台定义。
+            "main_program": f"""生成AFSIM主程序文件（main.txt）。
 
-需求：{query}
+基于以下项目需求：{query}
 
-只输出AFSIM代码，不要任何解释:""",
+项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+
+已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
+
+主程序必须包含：
+1. 必要的include导入语句
+2. 全局变量和常量定义
+3. 场景初始化和设置
+4. 主事件循环
+5. 输出配置
+6. 仿真控制参数
+
+生成完整的main.txt内容：""",
+            
+            "platforms": f"""生成AFSIM平台定义文件。
+
+基于项目需求：{query}
+
+项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+已生成的文件：{chr(10).join(f"- {f}" for f in self.generated_files)}
+
+需要生成以下平台的定义：
+{self._get_platform_requirements()}
+
+每个平台文件应该包含：
+1. 平台类型定义（platform_type）
+2. 物理参数（尺寸、重量、动力等）
+3. 初始状态（位置、速度、方向）
+4. 组件配置（传感器、武器、处理器等）
+5. 行为定义
+6. 特征信号引用（如适用）
+
+为每个平台生成单独的.txt文件。
+使用以下格式分隔不同文件：
+=== Platform_Name.txt ===
+[平台文件内容]
+=== 另一个平台.txt ===
+[另一个平台文件内容]
+
+开始生成：""",
             
             "scenarios": f"""生成AFSIM场景文件。
 
-需求：{query}
+基于项目需求：{query}
+项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
 
-只输出AFSIM代码，不要任何解释:。"""
+需要创建以下场景：
+1. 主测试场景
+2. 训练场景
+3. 验证场景
+
+每个场景文件应该包含：
+1. 场景名称和描述
+2. 参与平台及其初始配置
+3. 环境设置（地形、天气、时间）
+4. 任务目标和约束
+5. 事件序列和触发器
+
+为每个场景生成单独的.txt文件。
+使用以下格式分隔不同文件：
+=== Scene_Name.txt ===
+[场景文件内容]
+
+开始生成：""",
+            
+            "processors": f"""生成AFSIM处理器文件。
+
+基于项目需求：{query}
+项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
+
+需要生成以下处理器：
+1. 战术决策处理器
+2. 传感器数据处理处理器
+3. 武器控制处理器
+4. 通信处理器
+
+每个处理器文件应该包含：
+1. 处理器类型定义
+2. 输入输出接口
+3. 处理算法和逻辑
+4. 配置参数
+5. 性能指标
+
+为每个处理器生成单独的.txt文件。
+使用以下格式分隔不同文件：
+=== Processor_Name.txt ===
+[处理器文件内容]
+
+开始生成：""",
+            
+            "sensors": f"""生成AFSIM传感器文件。
+
+基于项目需求：{query}
+项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
+
+需要生成以下传感器：
+1. 雷达传感器
+2. 光电传感器
+3. 电子支援措施（ESM）
+4. 通信传感器
+
+每个传感器文件应该包含：
+1. 传感器类型定义
+2. 探测参数（范围、精度、分辨率）
+3. 工作模式
+4. 数据输出格式
+5. 功耗和性能
+
+为每个传感器生成单独的.txt文件。
+使用以下格式分隔不同文件：
+=== Sensor_Name.txt ===
+[传感器文件内容]
+
+开始生成：""",
+            
+            "weapons": f"""生成AFSIM武器文件。
+
+基于项目需求：{query}
+项目上下文：{json.dumps(self.project_context, ensure_ascii=False)}
+已生成的平台：{json.dumps(self.project_context.get('platforms', []), ensure_ascii=False)}
+
+需要生成以下武器：
+1. 空对空导弹
+2. 空对地导弹
+3. 机炮系统
+4. 炸弹
+
+每个武器文件应该包含：
+1. 武器类型定义
+2. 性能参数（射程、速度、精度）
+3. 制导系统
+4. 战斗部配置
+5. 发射控制
+
+为每个武器生成单独的.txt文件。
+使用以下格式分隔不同文件：
+=== Weapon_Name.txt ===
+[武器文件内容]
+
+开始生成："""
         }
         
-        instruction = stage_instructions.get(stage_name, f"根据需求生成{stage_info['description']}。\n需求：{query}")
-        
-        instruction += "\n\n只输出AFSIM代码，不要任何解释:"
-        
+        instruction = stage_instructions.get(stage_name, f"根据需求生成{stage_desc}。")
         return instruction
 
     def _get_platform_requirements(self) -> str:
@@ -576,176 +758,47 @@ class MultiStageGenerator:
             return "\n".join([f"- {p}" for p in platforms])
         return "根据项目需求生成合适的平台"
     
-    def _clean_generated_content(self, content: str, stage_name: str) -> str:
-        """清理生成的内容 - 更严格的版本"""
-        
-        # 移除所有引导性和解释性文字
-        patterns_to_remove = [
-            r'^现在，请.*$', r'^以下是.*$', r'^该代码.*$', r'^您提供的代码.*$',
-            r'^修正后的代码.*$', r'^在AFSIM中.*$', r'^注意.*$', r'^确保.*$',
-            r'^禁止.*$', r'^由于.*$', r'^根据.*要求.*$',
-            r'```[a-z]*\n', r'\n```',  # Markdown代码块
-            r'^\[.*\]$',  # 方括号内容
-            r'^输出：.*$', r'^生成：.*$',
-        ]
-        
-        for pattern in patterns_to_remove:
-            content = re.sub(pattern, '', content, flags=re.MULTILINE | re.IGNORECASE)
-        
-        # 移除重复的代码块
-        lines = content.split('\n')
-        seen_lines = set()
-        unique_lines = []
-        
-        for line in lines:
-            line_stripped = line.strip()
-            if not line_stripped:
-                continue
-                
-            # 跳过重复的行（对于平台定义特别重要）
-            if line_stripped in seen_lines:
-                continue
-                
-            seen_lines.add(line_stripped)
-            unique_lines.append(line)
-        
-        content = '\n'.join(unique_lines)
-        
-        # 移除多余的空行
-        content = re.sub(r'\n\s*\n+', '\n\n', content)
-        
-        return content.strip()
-    
     def _extract_files_from_content(self, content: str, stage_info: Dict, output_dir: str) -> List[Dict]:
         """从生成的内容中提取文件"""
         files = []
         stage_name = stage_info["name"]
         
-        print(f"🔍 提取阶段 {stage_name} 的内容...")
-        
         if stage_name == "project_structure":
-            # 直接查找并提取 JSON
-            import re
-            
-            print(f"   查找JSON内容...")
-            
-            # 尝试直接提取大括号中的内容
-            json_pattern = r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})'
-            matches = re.findall(json_pattern, content, re.DOTALL)
-            
-            if matches:
-                print(f"   找到 {len(matches)} 个可能的JSON块")
-                
-                for i, json_str in enumerate(matches):
-                    try:
-                        json_data = json.loads(json_str)
-                        print(f"   JSON块 {i+1} 解析成功")
-                        
-                        # 验证基本结构
-                        if isinstance(json_data, dict):
-                            # 确保必需字段存在
-                            if "components" not in json_data:
-                                json_data["components"] = []
-                            if "file_structure" not in json_data:
-                                json_data["file_structure"] = {"folders": [], "files": []}
-                            if "main_platform" not in json_data:
-                                json_data["main_platform"] = ""
-                            if "scenario_description" not in json_data:
-                                json_data["scenario_description"] = ""
-                            
-                            files.append({
-                                "path": "project_structure.json",
-                                "content": json.dumps(json_data, indent=2, ensure_ascii=False)
-                            })
-                            
-                            # 更新上下文
-                            self.project_context.update(json_data)
-                            print(f"   ✅ 提取到有效JSON")
-                            break  # 找到第一个有效JSON就停止
-                            
-                    except json.JSONDecodeError as e:
-                        print(f"   JSON块 {i+1} 解析失败: {e}")
-                        continue
+            # 尝试解析JSON
+            try:
+                # 提取JSON部分
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group()
+                    # 保存JSON文件
+                    files.append({
+                        "path": "project_structure.json",
+                        "content": json.dumps(json.loads(json_str), indent=2, ensure_ascii=False)
+                    })
+                    
+                    # 解析并更新上下文
+                    structure_data = json.loads(json_str)
+                    if "platforms" in structure_data:
+                        self.project_context["platforms"] = structure_data.get("platforms", [])
+            except json.JSONDecodeError:
+                # 如果不是JSON，保存为文本
+                files.append({
+                    "path": "project_structure.txt",
+                    "content": content
+                })
                 
         elif stage_name == "main_program":
-            # 提取 main.txt 内容
-            main_content = self._extract_main_program(content)
-            if main_content:
-                files.append({
-                    "path": "main.txt",
-                    "content": main_content
-                })
-                print(f"   ✅ 提取到 main.txt 内容")
-            else:
-                # 如果没提取到内容，创建默认的main.txt
-                print(f"   ⚠️ 未提取到有效内容，创建默认main.txt")
-                
-                default_main = f"""# AFSIM 主程序文件
-# 基于需求生成: {self.current_project.get('query', '')[:100]}
-
-include_once base_types/platforms/tank_type_a.txt
-
-platform_type Default_Platform WSF_PLATFORM
-icon default
-mover WSF_GROUND_MOVER
-
-scenario default_scenario
-description "默认场景"
-duration 600.0 sec
-
-output_config
-enable_output true
-output_frequency 10 Hz
-
-simulation_control
-max_time 60 s
-time_step 0.1 s
-log true"""
-                
-                files.append({
-                    "path": "main.txt",
-                    "content": default_main
-                })
-                
-        else:
-            # 对于其他阶段，使用智能文件分割
-            extracted_files = self._extract_multiple_files_smart(content, stage_name)
-            files.extend(extracted_files)
-            print(f"   📄 提取到 {len(extracted_files)} 个文件")
-        
-        return files
+            files.append({
+                "path": "main.txt",
+                "content": content
+            })
+            
+        elif stage_name in ["platforms", "scenarios", "processors", "sensors", "weapons", 
+                           "signatures"]:
+            # 使用智能文件分割
+            files.extend(self._extract_multiple_files_smart(content, stage_name))
     
-    def _extract_main_program(self, content: str) -> str:
-        """专门提取main.txt内容"""
-        # 查找AFSIM代码的开始
-        patterns = [
-            r'(platform_type[\s\S]*?simulation_control[\s\S]*?log true)',
-            r'(include[\s\S]*?simulation_control[\s\S]*?log true)',
-            r'(platform_type[\s\S]*?scenario[\s\S]*?end_scenario)',
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if match:
-                return match.group(1)
-        
-        # 如果没有找到完整结构，返回清理后的内容
-        lines = []
-        code_started = False
-        
-        for line in content.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-                
-            # 检测代码开始
-            if any(keyword in line.lower() for keyword in ['platform_type', 'include', 'scenario']):
-                code_started = True
-                
-            if code_started and '禁止' not in line and '注意' not in line:
-                lines.append(line)
-        
-        return '\n'.join(lines) if lines else content[:500]
+        return files
     
     def _extract_multiple_files_smart(self, content: str, folder_name: str) -> List[Dict]:
         """智能提取多个文件"""
@@ -853,15 +906,10 @@ log true"""
                     f.write(file_info["content"])
                 
                 saved_files.append(file_info["path"])
-                self.logger.info(f"✅ 保存文件: {file_info['path']} ({len(file_info['content'])} 字符)")
-                
-                # 输出调试信息
-                print(f"   ✓ 保存: {file_info['path']}")
+                self.logger.debug(f"保存文件: {file_info['path']}")
                 
             except Exception as e:
-                error_msg = f"保存文件失败 {file_info['path']}: {e}"
-                self.logger.error(error_msg)
-                print(f"   ✗ 失败: {error_msg}")
+                self.logger.error(f"保存文件失败 {file_info['path']}: {e}")
         
         return saved_files
     
