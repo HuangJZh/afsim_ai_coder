@@ -102,11 +102,113 @@ class AFSIMRAGSystem:
             print(f"❌ 模型加载失败: {e}")
             raise
     
-    def load_documents(self, file_list_path: str, base_dir: str = "."):
+    def load_documents_from_folder(self, folder_path):
         """
-        加载教程文档到向量数据库
+        从文件夹加载所有.md文件到向量数据库
         """
-        print(f"开始加载AFSIM教程文档: {file_list_path}")
+        print(f"开始扫描文件夹: {folder_path}")
+        
+        if not os.path.exists(folder_path):
+            print(f"❌ 文件夹不存在: {folder_path}")
+            return False
+        
+        if not os.path.isdir(folder_path):
+            print(f"❌ 路径不是文件夹: {folder_path}")
+            
+            return False
+        
+        try:
+            # 扫描所有.md文件
+            md_files = []
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    if file.endswith('.md'):
+                        full_path = os.path.join(root, file)
+                        md_files.append(full_path)
+            
+            print(f"找到 {len(md_files)} 个.md文件")
+            
+            if not md_files:
+                print("⚠ 未找到任何.md文件")
+                return False
+            
+            documents = []
+            metadatas = []
+            ids = []
+            
+            # 读取每个.md文件
+            for file_path in md_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        doc_content = f.read()
+                    
+                    if not doc_content.strip():
+                        print(f"⚠ 文件内容为空: {os.path.basename(file_path)}")
+                        continue
+                    
+                    # 分割文档
+                    paragraphs = self._split_into_chunks(doc_content)
+                    
+                    for i, para in enumerate(paragraphs):
+                        if para.strip():  # 跳过空段落
+                            doc_id = f"{os.path.basename(file_path)}_{i}"
+                            documents.append(para)
+                            metadatas.append({
+                                "source": file_path,
+                                "paragraph": i,
+                                "filename": os.path.basename(file_path)
+                            })
+                            ids.append(doc_id)
+                    
+                    print(f"✓ 已加载: {os.path.basename(file_path)} ({len(paragraphs)} 段落)")
+                    
+                except Exception as e:
+                    print(f"❌ 读取文件失败 {file_path}: {e}")
+            
+            # 批量嵌入并存储
+            if documents:
+                print(f"正在生成 {len(documents)} 个文档块的向量...")
+                embeddings = self.embedding_model.encode(
+                    documents,
+                    show_progress_bar=True,
+                    normalize_embeddings=True,
+                    batch_size=32,
+                    convert_to_numpy=True
+                )
+                
+                print("正在存储到向量数据库...")
+                
+                # 分批存储，避免内存问题
+                batch_size = 100
+                for i in range(0, len(documents), batch_size):
+                    end_idx = min(i + batch_size, len(documents))
+                    
+                    self.collection.add(
+                        embeddings=embeddings[i:end_idx].tolist(),
+                        documents=documents[i:end_idx],
+                        metadatas=metadatas[i:end_idx],
+                        ids=ids[i:end_idx]
+                    )
+                    
+                    print(f"  已存储 {end_idx}/{len(documents)} 个文档块")
+                
+                print(f"✅ 成功加载 {len(documents)} 个文档块")
+                return True
+            else:
+                print("⚠ 未找到任何文档内容")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 加载文档失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def load_documents_from_list(self, file_list_path: str, base_dir: str = "."):
+        """
+        从文件列表加载文档（备用方法）
+        """
+        print(f"从文件列表加载文档: {file_list_path}")
         
         if not os.path.exists(file_list_path):
             print(f"❌ 文件不存在: {file_list_path}")
@@ -114,16 +216,15 @@ class AFSIMRAGSystem:
         
         try:
             with open(file_list_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+                lines = f.readlines()
             
             documents = []
             metadatas = []
             ids = []
             
-            # 处理每一行
-            for line in content.split('\n'):
+            for line in lines:
                 line = line.strip()
-                if line and line.endswith('.md'):
+                if line.endswith('.md'):
                     # 清理路径
                     file_path = line.replace('D:.\\', '').replace('D:.', '').strip()
                     file_path = file_path.replace('\\', '/')
@@ -137,11 +238,10 @@ class AFSIMRAGSystem:
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 doc_content = f.read()
                             
-                            # 分割文档
                             paragraphs = self._split_into_chunks(doc_content)
                             
                             for i, para in enumerate(paragraphs):
-                                if para.strip():  # 跳过空段落
+                                if para.strip():
                                     doc_id = f"{os.path.basename(file_path)}_{i}"
                                     documents.append(para)
                                     metadatas.append({
@@ -158,7 +258,6 @@ class AFSIMRAGSystem:
                     else:
                         print(f"⚠ 文件不存在: {file_path}")
             
-            # 批量嵌入并存储
             if documents:
                 print(f"正在生成 {len(documents)} 个文档块的向量...")
                 embeddings = self.embedding_model.encode(
@@ -316,6 +415,8 @@ class AFSIMRAGSystem:
             
         except Exception as e:
             print(f"❌ 生成失败: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "response": f"生成回答时出错: {str(e)}",
                 "sources": [],
@@ -348,6 +449,7 @@ class AFSIMRAGSystem:
         print("  'exit' 或 'quit' - 退出")
         print("  'clear' - 清空上下文")
         print("  'sources' - 显示当前来源")
+        print("  'reload' - 重新加载文档")
         print("="*60)
         
         while True:
@@ -362,6 +464,10 @@ class AFSIMRAGSystem:
                     continue
                 elif user_input.lower() == 'sources':
                     print(f"数据库中有 {self.collection.count()} 个文档块")
+                    continue
+                elif user_input.lower() == 'reload':
+                    print("重新加载文档...")
+                    self.load_documents_from_folder("tutorials")
                     continue
                 elif not user_input:
                     continue
@@ -384,3 +490,5 @@ class AFSIMRAGSystem:
                 break
             except Exception as e:
                 print(f"❌ 错误: {e}")
+                import traceback
+                traceback.print_exc()

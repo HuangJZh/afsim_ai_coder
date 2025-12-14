@@ -21,14 +21,27 @@ def initialize_system():
         logger.error(f"初始化失败: {e}")
         return f"❌ 初始化失败: {str(e)}"
 
-def load_documents(file_list_path):
+def load_documents_from_folder(file_list_path):
     """加载文档"""
     if system is None:
         return "请先初始化系统"
     
     try:
-        system.load_documents(file_list_path, base_dir=".")
-        return "✅ 文档加载完成！"
+        # 检查路径是文件还是文件夹
+        if os.path.isdir(file_list_path):
+            # 如果是文件夹，使用 load_documents_from_folder
+            success = system.load_documents_from_folder(file_list_path)
+        elif os.path.isfile(file_list_path):
+            # 如果是文件，使用 load_documents_from_list
+            success = system.load_documents_from_list(file_list_path, base_dir=".")
+        else:
+            return f"❌ 路径不存在: {file_list_path}"
+        
+        if success:
+            return "✅ 文档加载完成！"
+        else:
+            return "❌ 文档加载失败"
+            
     except Exception as e:
         return f"❌ 文档加载失败: {str(e)}"
 
@@ -75,7 +88,7 @@ with gr.Blocks(title="AFSIM RAG代码生成系统") as demo:
             
             file_input = gr.Textbox(
                 label="文档列表文件路径",
-                value="tree_of_tutorials.txt",
+                value="",
                 placeholder="输入文档列表文件路径"
             )
             load_btn = gr.Button("加载文档", variant="secondary")
@@ -137,7 +150,7 @@ with gr.Blocks(title="AFSIM RAG代码生成系统") as demo:
     def on_load(file_path):
         if system is None:
             return "请先初始化系统", "系统未初始化"
-        status = load_documents(file_path)
+        status = load_documents_from_folder(file_path)
         return status, status
     
     load_btn.click(
