@@ -1,4 +1,4 @@
-# main_fixed.py
+# main.py
 #!/usr/bin/env python3
 """
 AFSIM RAG系统主启动脚本（兼容Gradio 3.x）
@@ -6,22 +6,31 @@ AFSIM RAG系统主启动脚本（兼容Gradio 3.x）
 import argparse
 import sys
 import os
+from utils import ConfigManager
 
 def main():
     parser = argparse.ArgumentParser(description="AFSIM RAG代码生成系统")
     parser.add_argument("--mode", choices=["cli", "web", "index", "test"], 
                        default="web", help="运行模式")
     parser.add_argument("--query", type=str, help="CLI模式下的查询")
-    parser.add_argument("--docs", type=str, default="tree_of_tutorials.txt",
+    parser.add_argument("--docs", type=str, default=None,
                        help="文档列表文件路径")
-    parser.add_argument("--db", type=str, default="./chroma_db",
+    parser.add_argument("--db", type=str, default=None,
                        help="Chroma数据库路径")
-    parser.add_argument("--port", type=int, default=7860,
+    parser.add_argument("--port", type=int, default=None,
                        help="Web服务器端口")
     parser.add_argument("--share", action="store_true",
                        help="是否生成公网分享链接")
     
     args = parser.parse_args()
+    
+    # 获取配置
+    config = ConfigManager()
+    
+    # 使用配置或命令行参数
+    docs_path = args.docs or config.get('paths.documents_list', 'tree_of_tutorials.txt')
+    db_path = args.db or config.get('database.chroma_path', './chroma_db')
+    port = args.port or config.get('web.port', 7860)
     
     # 导入必要的模块
     try:
@@ -33,20 +42,12 @@ def main():
     
     if args.mode == "index":
         print("开始索引文档...")
-        system = AFSIMRAGSystem(
-            model_path="D:/Qwen/Qwen/Qwen3-4B",
-            embedding_model="BAAI/bge-small-zh-v1.5",
-            chroma_db_path=args.db
-        )
-        system.load_documents(args.docs)
+        system = AFSIMRAGSystem(chroma_db_path=db_path)
+        system.load_documents_from_folder(docs_path)
         print("文档索引完成！")
     
     elif args.mode == "cli":
-        system = AFSIMRAGSystem(
-            model_path="D:/Qwen/Qwen/Qwen3-4B",
-            embedding_model="BAAI/bge-small-zh-v1.5",
-            chroma_db_path=args.db
-        )
+        system = AFSIMRAGSystem(chroma_db_path=db_path)
         
         if args.query:
             print(f"查询: {args.query}")
@@ -75,7 +76,7 @@ def main():
                         break
                     elif query.lower() == "load":
                         print("正在加载文档...")
-                        system.load_documents(args.docs)
+                        system.load_documents_from_folder(docs_path)
                         print("文档加载完成！")
                         continue
                     elif not query:
@@ -97,10 +98,10 @@ def main():
                     print(f"错误: {e}")
     
     elif args.mode == "web":
-        print(f"启动Web界面... 访问 http://localhost:{args.port}")
+        print(f"启动Web界面... 访问 http://localhost:{port}")
         try:
             from app import launch_app
-            launch_app(share=args.share, port=args.port)
+            launch_app(share=args.share, port=port)
         except ImportError:
             print("错误: 找不到app.py")
             print("请确保app.py在同一个目录下")
@@ -113,16 +114,18 @@ def main():
 def test_system():
     """测试系统功能"""
     from rag_afsim_system import AFSIMRAGSystem
+    from utils import ConfigManager
+    
+    config = ConfigManager()
     
     print("1. 初始化系统...")
     system = AFSIMRAGSystem(
-        model_path="D:/Qwen/Qwen/Qwen3-4B",
-        embedding_model="BAAI/bge-small-zh-v1.5",
         chroma_db_path="./chroma_db_test"
     )
     
     print("2. 加载文档...")
-    system.load_documents("tree_of_tutorials.txt")
+    docs_path = config.get('paths.tutorials_folder', 'tutorials')
+    system.load_documents_from_folder(docs_path)
     
     print("3. 测试查询...")
     test_queries = [

@@ -1,8 +1,13 @@
+# app.py
 import gradio as gr
 from rag_afsim_system import AFSIMRAGSystem
 import json
 import os
 from loguru import logger
+from utils import ConfigManager
+
+# 获取配置
+config = ConfigManager()
 
 # 初始化系统
 system = None
@@ -11,11 +16,7 @@ def initialize_system():
     """初始化RAG系统"""
     global system
     try:
-        system = AFSIMRAGSystem(
-            model_path="D:/Qwen/Qwen/Qwen3-4B",
-            embedding_model="BAAI/bge-small-zh-v1.5",
-            chroma_db_path="./chroma_db"
-        )
+        system = AFSIMRAGSystem()
         return "✅ 系统初始化成功！"
     except Exception as e:
         logger.error(f"初始化失败: {e}")
@@ -76,8 +77,8 @@ def query_afsim(query, history=None):
 
 # 创建Gradio界面
 with gr.Blocks(title="AFSIM RAG代码生成系统") as demo:
-    gr.Markdown("# 🚀 AFSIM RAG增强代码生成系统")
-    gr.Markdown("基于Qwen3-4B + BGE嵌入 + Chroma构建的AFSIM智能助手")
+    gr.Markdown("#AFSIM RAG增强代码生成系统")
+    gr.Markdown("基于Qwen3 + BGE嵌入 + Chroma的AFSIM智能助手")
     
     with gr.Row():
         with gr.Column(scale=1):
@@ -86,9 +87,11 @@ with gr.Blocks(title="AFSIM RAG代码生成系统") as demo:
             init_btn = gr.Button("初始化系统", variant="primary")
             init_status = gr.Markdown("等待初始化...")
             
+            # 使用配置中的默认路径
+            default_docs_path = config.get('paths.tutorials_folder', 'tutorials')
             file_input = gr.Textbox(
                 label="文档列表文件路径",
-                value="",
+                value=default_docs_path,
                 placeholder="输入文档列表文件路径"
             )
             load_btn = gr.Button("加载文档", variant="secondary")
@@ -96,11 +99,11 @@ with gr.Blocks(title="AFSIM RAG代码生成系统") as demo:
             
             gr.Markdown("### 示例查询")
             examples = [
-                "如何创建AFSIM移动平台？",
-                "如何配置传感器参数？",
+                "请定义一个蓝方的坦克平台类型",
+                "编写一段代码，仅用于设置仿真的结束时间为1200秒",
                 "生成一个武器系统控制的示例代码",
                 "如何可视化仿真结果？",
-                "解释AFSIM中的路由配置"
+                "定义一个蓝方导弹发射车"
             ]
             
             example_selector = gr.Examples(
@@ -215,12 +218,20 @@ with gr.Blocks(title="AFSIM RAG代码生成系统") as demo:
     )
 
 # 启动函数
-def launch_app(share=False, port=7860):
+def launch_app(share=None, port=None):
+    # 从配置获取Web设置
+    if share is None:
+        share = config.get('web.share', False)
+    if port is None:
+        port = config.get('web.port', 7860)
+    
+    debug = config.get('web.debug', True)
+    
     demo.launch(
         server_name="0.0.0.0",
         server_port=port,
         share=share,
-        debug=True
+        debug=debug
     )
 
 if __name__ == "__main__":

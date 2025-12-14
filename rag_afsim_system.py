@@ -1,4 +1,3 @@
-# rag_afsim_system_fixed.py
 import os
 import torch
 from typing import List, Dict, Any
@@ -7,19 +6,25 @@ from chromadb import PersistentClient
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from utils import ConfigManager
 
 class AFSIMRAGSystem:
     def __init__(self, 
-                 model_path: str = "D:/Qwen/Qwen/Qwen3-4B",
-                 embedding_model: str = "BAAI/bge-small-zh-v1.5",
-                 chroma_db_path: str = "./chroma_db"):
+                 model_path: str = None,
+                 embedding_model: str = None,
+                 chroma_db_path: str = None):
         """
         初始化AFSIM RAG系统
         """
         print("正在初始化AFSIM RAG系统...")
-        self.model_path = model_path
-        self.embedding_model_name = embedding_model
-        self.chroma_db_path = chroma_db_path
+        
+        # 初始化配置管理器
+        self.config = ConfigManager()
+        
+        # 使用配置值或参数值
+        self.model_path = model_path or self.config.get('model.path')
+        self.embedding_model_name = embedding_model or self.config.get('embedding.model_name')
+        self.chroma_db_path = chroma_db_path or self.config.get('database.chroma_path')
         
         # 初始化组件
         self._init_embedding_model()
@@ -33,19 +38,32 @@ class AFSIMRAGSystem:
         print(f"加载嵌入模型: {self.embedding_model_name}")
         self.embedding_model = SentenceTransformer(self.embedding_model_name)
         self.embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
+        
+        # 从配置获取嵌入参数
+        self.normalize_embeddings = self.config.get('embedding.normalize_embeddings', True)
+        self.embedding_batch_size = self.config.get('embedding.batch_size', 32)
+        
         print(f"嵌入维度: {self.embedding_dim}")
         
     def _init_vector_db(self):
         """初始化向量数据库"""
         print(f"初始化Chroma数据库: {self.chroma_db_path}")
+        
+        # 创建数据库目录如果不存在
+        os.makedirs(self.chroma_db_path, exist_ok=True)
+        
+        db_settings = self.config.get('database.settings', {})
         self.client = PersistentClient(
             path=self.chroma_db_path,
-            settings=Settings(anonymized_telemetry=False)
+            settings=Settings(
+                anonymized_telemetry=db_settings.get('anonymized_telemetry', False)
+            )
         )
         
         # 创建或获取集合
+        collection_name = self.config.get('vector_db.collection_name', 'afsim_tutorials')
         self.collection = self.client.get_or_create_collection(
-            name="afsim_tutorials",
+            name=collection_name,
             metadata={"description": "AFSIM教程文档向量存储"}
         )
         
@@ -66,32 +84,45 @@ class AFSIMRAGSystem:
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
             
-            # 尝试使用量化加载
-            try:
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_path,
-                    trust_remote_code=True,
-                    torch_dtype=torch.float16,
-                    device_map="auto",
-                    load_in_4bit=True
-                )
-                print("✓ 使用4-bit量化加载模型")
-            except:
-                print("⚠ 量化加载失败，尝试全精度加载")
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_path,
-                    trust_remote_code=True,
-                    torch_dtype=torch.float32,
-                    device_map="auto"
-                )
+            # 从配置获取加载参数
+            torch_dtype_str = self.config.get('system.torch_dtype', 'float16')
+            load_in_4bit = self.config.get('system.load_in_4bit', True)
+            device_map = self.config.get('system.device_map', 'auto')
             
-            # 设置生成参数
+            torch_dtype = getattr(torch, torch_dtype_str) if hasattr(torch, torch_dtype_str) else torch.float16
+            
+            # 尝试使用量化加载
+            if load_in_4bit:
+                try:
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        self.model_path,
+                        trust_remote_code=True,
+                        torch_dtype=torch_dtype,
+                        device_map=device_map,
+                        load_in_4bit=True
+                    )
+                    print("✓ 使用4-bit量化加载模型")
+                except Exception as e:
+                    print(f"⚠ 量化加载失败: {e}，尝试全精度加载")
+                    load_in_4bit = False
+            
+            if not load_in_4bit:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_path,
+                    trust_remote_code=True,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map
+                )
+                print("✓ 使用全精度加载模型")
+            
+            # 从配置获取生成参数
+            generation_config = self.config.get('model.generation', {})
             self.generation_config = {
-                "max_new_tokens": 512,
-                "temperature": 0.3,
-                "top_p": 0.9,
-                "do_sample": True,
-                "repetition_penalty": 1.1,
+                "max_new_tokens": generation_config.get('max_new_tokens', 512),
+                "temperature": generation_config.get('temperature', 0.3),
+                "top_p": generation_config.get('top_p', 0.9),
+                "do_sample": generation_config.get('do_sample', True),
+                "repetition_penalty": generation_config.get('repetition_penalty', 1.1),
                 "pad_token_id": self.tokenizer.pad_token_id,
                 "eos_token_id": self.tokenizer.eos_token_id
             }
@@ -102,10 +133,13 @@ class AFSIMRAGSystem:
             print(f"❌ 模型加载失败: {e}")
             raise
     
-    def load_documents_from_folder(self, folder_path):
+    def load_documents_from_folder(self, folder_path=None):
         """
         从文件夹加载所有.md文件到向量数据库
         """
+        if folder_path is None:
+            folder_path = self.config.get('paths.tutorials_folder', 'tutorials')
+        
         print(f"开始扫描文件夹: {folder_path}")
         
         if not os.path.exists(folder_path):
@@ -114,31 +148,43 @@ class AFSIMRAGSystem:
         
         if not os.path.isdir(folder_path):
             print(f"❌ 路径不是文件夹: {folder_path}")
-            
             return False
         
         try:
-            # 扫描所有.md文件
-            md_files = []
+            # 从配置获取支持的文件扩展名
+            supported_extensions = self.config.get('document.supported_extensions', ['.md'])
+            
+            # 扫描所有支持的文件
+            supported_files = []
             for root, dirs, files in os.walk(folder_path):
                 for file in files:
-                    if file.endswith('.md'):
+                    if any(file.endswith(ext) for ext in supported_extensions):
                         full_path = os.path.join(root, file)
-                        md_files.append(full_path)
+                        supported_files.append(full_path)
             
-            print(f"找到 {len(md_files)} 个.md文件")
+            print(f"找到 {len(supported_files)} 个支持的文件")
             
-            if not md_files:
-                print("⚠ 未找到任何.md文件")
+            if not supported_files:
+                print("⚠ 未找到任何支持的文件")
                 return False
             
             documents = []
             metadatas = []
             ids = []
             
-            # 读取每个.md文件
-            for file_path in md_files:
+            # 从配置获取分块参数
+            chunk_size = self.config.get('document.default_chunk_size', 400)
+            max_file_size = self.config.get('document.max_file_size_mb', 10) * 1024 * 1024
+            
+            # 读取每个文件
+            for file_path in supported_files:
                 try:
+                    # 检查文件大小
+                    file_size = os.path.getsize(file_path)
+                    if file_size > max_file_size:
+                        print(f"⚠ 文件过大跳过: {os.path.basename(file_path)} ({file_size/1024/1024:.1f}MB)")
+                        continue
+                    
                     with open(file_path, 'r', encoding='utf-8') as f:
                         doc_content = f.read()
                     
@@ -147,7 +193,7 @@ class AFSIMRAGSystem:
                         continue
                     
                     # 分割文档
-                    paragraphs = self._split_into_chunks(doc_content)
+                    paragraphs = self._split_into_chunks(doc_content, chunk_size=chunk_size)
                     
                     for i, para in enumerate(paragraphs):
                         if para.strip():  # 跳过空段落
@@ -156,7 +202,8 @@ class AFSIMRAGSystem:
                             metadatas.append({
                                 "source": file_path,
                                 "paragraph": i,
-                                "filename": os.path.basename(file_path)
+                                "filename": os.path.basename(file_path),
+                                "filepath": file_path
                             })
                             ids.append(doc_id)
                     
@@ -171,15 +218,15 @@ class AFSIMRAGSystem:
                 embeddings = self.embedding_model.encode(
                     documents,
                     show_progress_bar=True,
-                    normalize_embeddings=True,
-                    batch_size=32,
+                    normalize_embeddings=self.normalize_embeddings,
+                    batch_size=self.embedding_batch_size,
                     convert_to_numpy=True
                 )
                 
                 print("正在存储到向量数据库...")
                 
                 # 分批存储，避免内存问题
-                batch_size = 100
+                batch_size = self.config.get('vector_db.chunk_size', 100)
                 for i in range(0, len(documents), batch_size):
                     end_idx = min(i + batch_size, len(documents))
                     
@@ -203,7 +250,7 @@ class AFSIMRAGSystem:
             import traceback
             traceback.print_exc()
             return False
-    
+
     def load_documents_from_list(self, file_list_path: str, base_dir: str = "."):
         """
         从文件列表加载文档（备用方法）
@@ -284,8 +331,11 @@ class AFSIMRAGSystem:
             print(f"❌ 加载文档失败: {e}")
             return False
     
-    def _split_into_chunks(self, text: str, chunk_size: int = 400) -> List[str]:
+    def _split_into_chunks(self, text: str, chunk_size: int = None) -> List[str]:
         """将文本分割成块"""
+        if chunk_size is None:
+            chunk_size = self.config.get('document.default_chunk_size', 400)
+            
         chunks = []
         paragraphs = text.split('\n\n')
         
@@ -359,13 +409,13 @@ class AFSIMRAGSystem:
             context += f"{doc['content'][:800]}\n\n"
         
         # 完整提示
-        prompt = f"""你是一个AFSIM（Advanced Framework for Simulation）专家助手。
-请基于提供的教程内容回答问题。如果教程中没有相关信息，请基于你的知识回答。
+        prompt = f"""你是一个AFSIM专家助手。
+请基于提供的教程内容直接生成AFSIM代码
 
 问题：{query}
 
 {context}
-请提供详细、准确的回答："""
+AFSIM代码："""
         
         return prompt
     
