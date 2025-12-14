@@ -97,7 +97,7 @@ class AFSimProjectStructure:
             stages.append({
                 "name": "single_file_generation",
                 "description": "生成完整的AFSIM仿真脚本（包含所有定义和场景）",
-                "max_tokens": 3500,  # 增加token限制以容纳长代码
+                "max_tokens": 3500,  # 保持较高的token限制
                 "temperature": 0.2,
                 "depends_on": [],
                 "output_patterns": ["simulation_script.txt"]
@@ -296,27 +296,50 @@ class MultiStageGenerator:
         try:
             # 检查是否有阶段感知的RAG系统
             if hasattr(self.chat_system, 'generate_stage_response'):
-                # 如果是单文件模式，使用特定的提示词策略
+                # 如果是单文件模式，使用极其严格的提示词策略
                 if single_file_mode:
                     prompt = f"""
-你需要生成一个完整的、可运行的AFSIM仿真脚本文件，包含所有必要的组件定义和场景配置。
-请将所有内容整合在一个文件中，不要使用 include 语句引用外部文件。
+你是一个AFSIM仿真脚本代码生成器。请严格按照以下指令行动：
 
-用户需求:
+=== 🔴 核心指令 (必须遵守) ===
+1. **严禁输出任何思考过程**：不要输出 "Thinking...", "Okay...", "Here is the code..." 等任何非代码文本。
+2. **严禁输出解释性文字**：直接开始写代码。
+3. **强制使用标记包裹**：你生成的代码必须包裹在 `<<<CODE_START>>>` 和 `<<<CODE_END>>>` 标记之间。系统只会提取这两个标记之间的内容。
+4. **完整性**：生成的代码必须是一个完整的、可运行的脚本，包含所有定义，不依赖外部 `include`。
+
+=== 📝 用户需求 ===
 {query}
 
-请确保包含：
-1. 必要的全局配置（如日志路径）
-2. 平台类型定义（包含移动器、传感器、武器等组件）
-3. 场景布局（红蓝方平台实例、位置、航线）
-4. 仿真控制（结束时间、事件输出等）
+=== 💻 代码结构要求 ===
+1. 头部：路径变量 (define_path_variable) 和日志配置 (log_file)。
+2. 定义部分：平台类型 (platform_type)、武器、传感器等。
+3. 场景部分：具体的平台实例 (platform)，包含位置 (position) 和阵营 (side)。
+4. 尾部：仿真结束时间 (end_time)。
 
-请直接输出完整的代码内容。
+=== ✅ 预期输出格式示例 ===
+<<<CODE_START>>>
+define_path_variable NAME demo
+log_file output/$(NAME).log
+
+platform_type TANK WSF_PLATFORM
+    icon tank
+    mover WSF_GROUND_MOVER
+    end_mover
+end_platform_type
+
+platform tank_1 TANK
+    position 0 0 0
+    side blue
+end_platform
+
+end_time 100 sec
+<<<CODE_END>>>
+
+请立即开始生成代码（从 <<<CODE_START>>> 开始）：
 """
-                    # 复用 main_program 阶段的 RAG 知识，或者使用通用的 generate_enhanced_response
                     rag_result = self.chat_system.generate_enhanced_response(prompt)
                 else:
-                    # 使用阶段感知RAG生成
+                    # 多文件模式
                     result = self.chat_system.generate_stage_response(
                         stage_name=stage_name,
                         query=query,
@@ -333,20 +356,17 @@ class MultiStageGenerator:
                 generated_content = rag_result["result"]
                 
             else:
-                # 回退到原来的方法
+                # 回退方法
                 prompt = f"生成{stage_info['description']}，需求:\n{query}"
                 rag_result = self.chat_system.generate_enhanced_response(prompt)
-                
-                if not rag_result or "result" not in rag_result:
-                    return {
-                        "success": False,
-                        "error": "生成结果为空"
-                    }
-                
                 generated_content = rag_result["result"]
             
             # 提取文件内容
             files = self._extract_files_from_content(generated_content, stage_info, output_dir, single_file_mode)
+            
+            # 如果提取失败（比如模型没听话加标记），记录错误以便调试
+            if not files:
+                self.logger.warning(f"阶段 {stage_name} 未提取到有效文件，原始内容长度: {len(generated_content)}")
             
             # 保存文件
             output_files = self._save_generated_files(files, output_dir)
@@ -374,18 +394,53 @@ class MultiStageGenerator:
         stage_name = stage_info["name"]
         
         if single_file_mode:
-            # 单文件模式：直接保存所有内容到一个文件
-            # 尝试清理一下可能存在的 markdown 代码块标记
-            content = re.sub(r'^```\w*\n', '', content)
-            content = re.sub(r'\n```$', '', content)
-            files.append({
-                "path": "simulation_script.txt",
-                "content": content.strip()
-            })
+            clean_content = ""
+            # 策略1：优先尝试提取 <<<CODE_START>>> 标记
+            # 使用 re.DOTALL 让 . 匹配换行符
+            marker_pattern = r'<<<CODE_START>>>\s*(.*?)\s*<<<CODE_END>>>'
+            marker_match = re.search(marker_pattern, content, re.DOTALL)
+            
+            if marker_match:
+                clean_content = marker_match.group(1)
+                self.logger.info("成功提取 <<<CODE_START>>> 标记内容")
+            else:
+                # 策略2：尝试提取 Markdown 代码块
+                code_block_pattern = r'```(?:afsim|txt|)\s*(.*?)\s*```'
+                # 找最长的一个代码块，通常是主代码
+                matches = re.findall(code_block_pattern, content, re.DOTALL)
+                if matches:
+                    # 假设最长的块是完整代码
+                    clean_content = max(matches, key=len)
+                    self.logger.info("提取到 Markdown 代码块")
+                else:
+                    # 策略3：最后的兜底 - 启发式清洗
+                    # 尝试找到第一个像代码的行（以注释、define、platform 等开头）
+                    self.logger.warning("未找到明确代码标记，尝试启发式提取")
+                    lines = content.split('\n')
+                    start_idx = -1
+                    keywords = ['#', '//', 'define_path', 'log_file', 'platform', 'include', 'event_output']
+                    
+                    for i, line in enumerate(lines):
+                        line_strip = line.strip()
+                        if any(line_strip.startswith(kw) for kw in keywords):
+                            start_idx = i
+                            break
+                    
+                    if start_idx != -1:
+                        clean_content = '\n'.join(lines[start_idx:])
+                    else:
+                        # 实在没办法，全部当做代码（虽然可能包含废话）
+                        clean_content = content
+
+            if clean_content.strip():
+                files.append({
+                    "path": "simulation_script.txt",
+                    "content": clean_content.strip()
+                })
             return files
 
+        # 多文件模式的提取逻辑
         if stage_name == "project_structure":
-            # 尝试解析JSON
             try:
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
                 if json_match:
@@ -407,7 +462,6 @@ class MultiStageGenerator:
             })
             
         elif stage_name in ["platforms", "scenarios", "processors", "sensors", "weapons", "signatures"]:
-            # 使用智能文件分割
             folder_files = self._extract_multiple_files_simple(content, stage_name)
             files.extend(folder_files)
     
@@ -473,12 +527,10 @@ class MultiStageGenerator:
     def _extract_context_from_content(self, content: str) -> Dict:
         """从内容中提取上下文信息"""
         context = {}
-        
         # 提取平台名称
         platform_matches = re.findall(r'platform_type\s+(\w+)', content, re.IGNORECASE)
         if platform_matches:
             context["platforms"] = list(set(platform_matches))
-        
         return context
     
     def _generate_project_report(self) -> Dict:
@@ -514,7 +566,7 @@ class MultiStageChatSystem:
     
     def __init__(self, project_root: str, model_path: str = None):
         from rag_enhanced import EnhancedStageAwareRAGChatSystem
-        from utils import setup_logging, ConfigManager
+        from utils import setup_logging
         
         # 设置日志
         setup_logging()
