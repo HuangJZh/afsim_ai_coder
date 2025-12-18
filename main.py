@@ -1,222 +1,187 @@
-#!/usr/bin/env python3
-"""
-AFSIM RAG系统主启动脚本（兼容Gradio 3.x）
-"""
-import argparse
-import sys
-import os
-import signal
-import logging
-from pathlib import Path
+# AFSIM 代码生成助手 (本地 Python 版)
+# 已修改为使用 OpenAI 兼容 API
 
-# 设置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+import os
+import sys
+import time
+import requests  
+
+
+API_BASE_URL = "https://api.deepseek.com"  
+API_KEY = "sk-75ed608c4f8342c6934bb5c6f9cb4888"  
+MODEL_NAME = "deepseek-chat"  
+
+
+
+KNOWLEDGE_DIR = "./tutorials"  
+
+def load_knowledge_base(directory):
+    """加载指定目录下的所有文本文件作为知识库"""
+    knowledge = ""
+    if not os.path.exists(directory):
+        print(f"警告: 目录 '{directory}' 不存在。请创建该目录并放入 AFSIM 规则文件。")
+        return knowledge
+
+    print(f"正在加载 '{directory}' 中的规则文件...")
+    file_count = 0
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            # 支持的文件扩展名
+            if file.lower().endswith(('.txt', '.md', '.cpp', '.h', '.json', '.xml')):
+                path = os.path.join(root, file)
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        knowledge += f"\n--- 文档: {file} ---\n{content}\n----------------\n"
+                        file_count += 1
+                except Exception as e:
+                    print(f"跳过文件 {file}: {e}")
+    
+    print(f"共加载 {file_count} 个文件。")
+    return knowledge
+
+def chat_completion(messages, system_instruction="", max_tokens=4000):
+    """使用 OpenAI 兼容 API 进行对话"""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
+    
+    # 如果有系统指令，添加到消息列表开头
+    if system_instruction:
+        messages = [{"role": "system", "content": system_instruction}] + messages
+    
+    payload = {
+        "model": MODEL_NAME,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.2,
+        "stream": False  # 简化版本，先不使用流式
+    }
+    
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        else:
+            error_msg = f"API 错误: {response.status_code} - {response.text}"
+            print(f"\n[错误] {error_msg}")
+            return f"错误: {error_msg}"
+            
+    except requests.exceptions.Timeout:
+        return "错误: 请求超时，请稍后重试"
+    except Exception as e:
+        return f"错误: {str(e)}"
 
 def main():
-    parser = argparse.ArgumentParser(description="AFSIM RAG代码生成系统")
-    parser.add_argument("--mode", choices=["cli", "web", "index", "test", "interactive"], 
-                       default="web", help="运行模式")
-    parser.add_argument("--query", type=str, help="CLI模式下的查询")
-    parser.add_argument("--docs", type=str, default=None,
-                       help="文档列表文件路径或文件夹路径")
-    parser.add_argument("--db", type=str, default=None,
-                       help="Chroma数据库路径")
-    parser.add_argument("--port", type=int, default=None,
-                       help="Web服务器端口")
-    parser.add_argument("--share", action="store_true",
-                       help="是否生成公网分享链接")
-    parser.add_argument("--config", type=str, default="config.yaml",
-                       help="配置文件路径")
-    
-    args = parser.parse_args()
-    
-    # 设置环境变量以便ConfigManager使用
-    if args.config and os.path.exists(args.config):
-        os.environ['AFSIM_CONFIG_PATH'] = args.config
-    
-    # 导入必要的模块
-    try:
-        from utils import ConfigManager
-        from rag_afsim_system import AFSIMRAGSystem
-    except ImportError as e:
-        print(f"导入模块失败: {e}")
-        print("请确保所有依赖模块在同一个目录下")
-        sys.exit(1)
-    
-    # 获取配置
-    config = ConfigManager()
-    
-    # 使用配置或命令行参数
-    docs_path = args.docs or config.get('paths.tutorials_folder', 'tutorials')
-    db_path = args.db or config.get('database.chroma_path', './chroma_db')
-    port = args.port or config.get_int('web.port', 7860)
-    
-    if args.mode == "index":
-        print("开始索引文档...")
-        try:
-            system = AFSIMRAGSystem(chroma_db_path=db_path)
-            success = system.load_documents_from_folder(docs_path)
-            if success:
-                print("✅ 文档索引完成！")
-                sys.exit(0)
-            else:
-                print("❌ 文档索引失败")
-                sys.exit(1)
-        except Exception as e:
-            print(f"❌ 索引过程中出错: {e}")
-            sys.exit(1)
-    
-    elif args.mode == "cli":
-        try:
-            system = AFSIMRAGSystem(chroma_db_path=db_path)
-        except Exception as e:
-            print(f"❌ 系统初始化失败: {e}")
-            sys.exit(1)
-        
-        if args.query:
-            print(f"查询: {args.query}")
-            result = system.generate_response(args.query)
-            print("\n" + "="*60)
-            print("回答：")
-            print(result["response"])
-            print("\n来源：")
-            for source in result["sources"][:5]:
-                print(f"  - {source}")
-            if len(result["sources"]) > 5:
-                print(f"  - ... 还有 {len(result['sources']) - 5} 个来源")
-            print("="*60)
-        else:
-            print("交互式CLI模式（输入'exit'退出）")
-            print("注意：首次运行需要先加载文档，输入 'load' 加载文档")
-            
-            # 检查文档是否已加载
-            doc_count = system.collection.count()
-            if doc_count == 0:
-                print(f"⚠ 数据库中有 {doc_count} 个文档，建议先加载文档")
-            
-            while True:
-                try:
-                    query = input("\n请输入问题: ").strip()
-                    if query.lower() in ["exit", "quit", "q"]:
-                        print("再见！")
-                        break
-                    elif query.lower() == "load":
-                        print("正在加载文档...")
-                        success = system.load_documents_from_folder(docs_path)
-                        if success:
-                            print("✅ 文档加载完成！")
-                        else:
-                            print("❌ 文档加载失败")
-                        continue
-                    elif not query:
-                        continue
-                    
-                    result = system.generate_response(query)
-                    print("\n" + "="*60)
-                    print(result["response"])
-                    print("-"*40)
-                    if result["sources"]:
-                        print("参考来源:")
-                        for source in result["sources"][:5]:
-                            print(f"  • {source}")
-                        if len(result["sources"]) > 5:
-                            print(f"  • ... 还有 {len(result['sources']) - 5} 个来源")
-                    else:
-                        print("⚠ 未找到相关参考来源")
-                    print("="*60)
-                    
-                except KeyboardInterrupt:
-                    print("\n程序已中断")
-                    break
-                except Exception as e:
-                    print(f"错误: {e}")
-    
-    elif args.mode == "interactive":
-        try:
-            system = AFSIMRAGSystem(chroma_db_path=db_path)
-            system.interactive_chat()
-        except Exception as e:
-            print(f"❌ 系统初始化失败: {e}")
-            sys.exit(1)
-    
-    elif args.mode == "web":
-        print(f"启动Web界面... 访问 http://localhost:{port}")
-        print("按 Ctrl+C 停止服务器")
-        
-        try:
-            from fastapi_app import launch_app
-            
-            def signal_handler(sig, frame):
-                print("\n正在关闭服务器...")
-                sys.exit(0)
-            
-            # 设置信号处理器
-            if hasattr(signal, 'SIGINT'):
-                signal.signal(signal.SIGINT, signal_handler)
-            
-            # 启动应用
-            launch_app(share=args.share, port=port)
-            
-        except KeyboardInterrupt:
-            print("\n服务器已关闭")
-            sys.exit(0)
-        except Exception as e:
-            print(f"启动失败: {e}")
-            import traceback
-            traceback.print_exc()
-            sys.exit(1)
-    
-    elif args.mode == "test":
-        print("运行系统测试...")
-        test_system()
-
-def test_system():
-    """测试系统功能"""
-    from rag_afsim_system import AFSIMRAGSystem
-    from utils import ConfigManager
-    
-    config = ConfigManager()
-    
-    print("1. 初始化系统...")
-    try:
-        system = AFSIMRAGSystem(
-            chroma_db_path="./chroma_db_test"
-        )
-    except Exception as e:
-        print(f"❌ 系统初始化失败: {e}")
+    if not API_KEY or API_KEY.startswith("sk-xxxxxxxx"):
+        print("="*50)
+        print("请先配置 API Key!")
+        print("="*50)
+        print("\n请选择以下方式之一获取免费 API Key:")
+        print("1. DeepSeek (推荐):")
+        print("   - 访问: https://platform.deepseek.com/api_keys")
+        print("   - 注册后获取免费 API Key")
+        print("   - 将 API_KEY 替换为您的密钥")
+        print("\n2. OpenRouter:")
+        print("   - 访问: https://openrouter.ai/settings/keys")
+        print("   - 注册后获取免费 API Key")
+        print("   - 取消注释 OpenRouter 配置")
+        print("\n3. 本地 Ollama (需要安装):")
+        print("   - 安装: https://ollama.com/")
+        print("   - 运行: ollama run qwen2.5:7b")
+        print("   - 设置 API_BASE_URL = 'http://localhost:11434/v1'")
+        print("   - 设置 API_KEY = 'ollama' (任意值)")
+        print("   - 设置 MODEL_NAME = 'qwen2.5:7b'")
+        print("\n按 Enter 退出...")
+        input()
         return
     
-    print("2. 加载文档...")
-    docs_path = config.get('paths.tutorials_folder', 'tutorials')
-    if os.path.exists(docs_path):
-        success = system.load_documents_from_folder(docs_path)
-        if not success:
-            print("⚠ 文档加载失败，继续测试...")
-    else:
-        print(f"⚠ 文档路径不存在: {docs_path}")
-    
-    print("3. 测试查询...")
-    test_queries = [
-        "什么是AFSIM?",
-        "如何创建移动平台?",
-        "生成一个简单的仿真示例"
-    ]
-    
-    for query in test_queries:
-        print(f"\n测试查询: {query}")
+    knowledge_base = load_knowledge_base(KNOWLEDGE_DIR)
+
+    system_instruction = """你是一个精通 AFSIM 代码生成专家。
+你的任务是根据用户的需求，参考提供的知识库规则，生成正确、规范的 AFSIM 代码脚本。
+请遵循以下规则：
+1. 在每个文件的开头用注释说明文件名。
+1. 优先使用知识库中提供的语法和模式。
+2. 保持代码简洁，逻辑清晰。
+3. 不需要解释代码，只需提供代码本身。
+"""
+
+    if knowledge_base:
+        system_instruction += f"\n=== 本地知识库/参考文档 开始 ===\n{knowledge_base}\n=== 本地知识库/参考文档 结束 ===\n"
+
+    print("\n" + "="*50)
+    print("AFSIM 本地代码助手启动")
+    print(f"API: {API_BASE_URL}")
+    print(f"模型: {MODEL_NAME}")
+    print("使用说明: 输入多行内容，最后另起一行输入 //end 提交")
+    print("输入 'quit' 或 'exit' (单独一行) 退出程序")
+    print("="*50 + "\n")
+
+    # 对话历史
+    conversation_history = []
+
+    while True:
         try:
-            result = system.generate_response(query)
-            print(f"响应长度: {len(result['response'])} 字符")
-            print(f"参考来源数量: {len(result['sources'])}")
+            print("需求 > (输入完成后，另起一行输入 //end 结束)")
+            lines = []
+            while True:
+                try:
+                    line = input()
+                except EOFError:
+                    break # 处理 Ctrl+D/Z 的情况
+                
+                # 检查结束标记
+                if line.strip() == "//end":
+                    break
+                
+                lines.append(line)
+            
+            user_input = "\n".join(lines)
+            # --- 修改结束 ---
+
+            # 检查退出命令
+            if user_input.strip().lower() in ['quit', 'exit']:
+                break
+            
+            if not user_input.strip():
+                print("输入为空，请重新输入。\n")
+                continue
+
+            print("\n正在生成代码...", flush=True)
+            
+            # 添加到对话历史
+            conversation_history.append({"role": "user", "content": user_input})
+            
+            # 发送请求
+            response = chat_completion(conversation_history, system_instruction)
+            
+            print("\n" + "-"*50)
+            print("生成的代码:")
             print("-"*50)
+            print(response)
+            
+            # 将助手回复添加到历史
+            conversation_history.append({"role": "assistant", "content": response})
+            
+            print("\n" + "-"*50 + "\n")
+            
+            # 避免频繁请求导致限流
+            time.sleep(1)
+            
+        except KeyboardInterrupt:
+            print("\n程序已停止。")
+            break
         except Exception as e:
-            print(f"❌ 查询失败: {e}")
-    
-    print("测试完成！")
+            print(f"\n发生错误: {e}")
 
 if __name__ == "__main__":
     main()
