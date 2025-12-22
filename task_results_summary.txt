@@ -1,0 +1,2195 @@
+============================================================
+AFSIM 自动化任务输出汇总报告
+============================================================
+### [总览] ###
+仅测试单次无反馈生成的编译通过率。
+简单任务：14/15 通过率93.3%
+中等任务：4/10 通过率40%
+困难任务：0/5 通过率0%
+
+**************************************************
+
+### [任务 1] ###
+【需求内容】:
+1.[基础平台定义] 请定义一个蓝方的坦克平台类型（Tank_Type_A），使用 WSF_PLATFORM 基础类型。为其指定图标为 "tank"，并配备 WSF_GROUND_MOVER 移动器。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// tank_type_a.txt
+platform_type TANK_TYPE_A WSF_PLATFORM
+    icon tank
+    mover WSF_GROUND_MOVER
+    end_mover
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 2] ###
+【需求内容】:
+2.[静态部署] 请创建一个场景，在场景中部署一辆红方卡车（Red_Truck）。位置固定在北纬30°15'00"N，东经120°00'00"E，朝向为90度。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// setup.txt
+platform_type RED_TRUCK WSF_PLATFORM
+    icon truck
+    mover WSF_GROUND_MOVER
+    end_mover
+end_platform_type
+
+// scenarios/red_laydown.txt
+platform red_truck RED_TRUCK
+    position 30:15:00.000n 120:00:00.000e
+    side red
+    heading 90 deg
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 3] ###
+【需求内容】:
+3.[简单飞行路径] 定义一架蓝方无人机（UAV-1），从北纬24°00'00"N，东经121°00'00"E起飞。设置其按照由三个航路点组成的航线飞行，飞行高度保持5000英尺，速度为150节。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// setup.txt
+platform_type UAV WSF_PLATFORM
+    icon uav
+    mover WSF_AIR_MOVER
+    end_mover
+end_platform_type
+
+// scenarios/blue_laydown.txt
+platform uav_1 UAV
+    position 24:00:00.000n 121:00:00.000e
+    side blue
+    altitude 5000 ft
+    heading 0 deg
+
+    route
+        // Waypoint 0 (Start)
+        position 24:00:00.000n 121:00:00.000e altitude 5000 ft
+        speed 150 kts
+
+        // Waypoint 1
+        position 24:30:00.000n 121:30:00.000e altitude 5000 ft
+
+        // Waypoint 2
+        position 25:00:00.000n 121:00:00.000e altitude 5000 ft
+
+        // Waypoint 3 (Loop back to start)
+        position 24:00:00.000n 121:00:00.000e altitude 5000 ft
+        goto 0
+    end_route
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 4] ###
+【需求内容】:
+4.[基础传感器定义] 请编写代码定义一个名为 SIMPLE_RADAR 的传感器类型。它是 WSF_RADAR_SENSOR，最大探测距离为50海里，帧时间（扫描周期）为5秒。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// simple_radar_sensor.txt
+sensor SIMPLE_RADAR WSF_RADAR_SENSOR
+    maximum_range 50 nm
+    frame_time 5 sec
+end_sensor
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 5] ###
+【需求内容】:
+5.[基础通信设备] 定义一个名为 Generic_Radio 的通信设备。使用 WSF_COMM_TRANSCEIVER 类型，并将其加入名为 "Blue_Net" 的网络。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// generic_radio.txt
+comm Generic_Radio WSF_COMM_TRANSCEIVER
+    network_name Blue_Net
+end_comm
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 6] ###
+【需求内容】:
+6.[输出配置] 请配置仿真输出。设置日志文件名为 sim_test.log，并开启 event_pipe 输出到 sim_test.aer，仿真总时长设置为1小时。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// output_config.txt
+
+log_file sim_test.log
+
+event_pipe file sim_test.aer
+    use_preset full
+end_event_pipe
+
+end_time 1 hr
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 7] ###
+【需求内容】:
+7.[简单武器定义] 定义一种名为 Iron_Bomb 的非制导炸弹武器。使用 WSF_EXPLICIT_WEAPON 类型，关联的发射平台类型为 BOMB_PLATFORM（假设已定义），每架次携带数量为4。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// iron_bomb_weapon.txt
+
+weapon Iron_Bomb WSF_EXPLICIT_WEAPON
+    launched_platform_type BOMB_PLATFORM
+    quantity 4
+end_weapon
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 8] ###
+【需求内容】:
+8.[卫星轨道] 定义一颗蓝方侦察卫星（Sat-Blue），使用 WSF_SPACE_MOVER。请设置其轨道参数：高度800公里，航向0度（极轨道），初始位置在北纬0°，东经100°。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// satellite_orbit.txt
+
+platform_type SAT_BLUE WSF_PLATFORM
+    icon satellite
+    side blue
+
+    mover WSF_SPACE_MOVER
+        // 设置轨道参数
+        altitude 800 km
+        heading 0 deg
+        position 0:00:00.000n 100:00:00.000e
+    end_mover
+
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unknown command: altitude 
+             'task1.txt', line 9, near column 17 
+-----------------
+
+**************************************************
+
+### [任务 9] ###
+【需求内容】:
+9.[基础特征定义] 请定义一个雷达特征（Radar Signature），名称为 Stealth_Sig。设置为恒定值（Constant），RCS大小为0.1平方米。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// Stealth_Sig_radar_signature.txt
+radar_signature Stealth_Sig
+    constant 0.1 m^2
+end_radar_signature
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 10] ###
+【需求内容】:
+10.[平台引用特征] 定义一个战斗机平台类型 F-35_Type。在其中引用名为 Stealth_Sig 的雷达特征和名为 Jet_IR_Sig 的红外特征。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// platforms/f-35_type.txt
+platform_type F-35_Type WSF_PLATFORM
+    icon fighter
+    radar_signature Stealth_Sig
+    infrared_signature Jet_IR_Sig
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 11] ###
+【需求内容】:
+11.[简单船舶航行] 定义一艘红方驱逐舰，使用 WSF_SURFACE_MOVER。使其从北纬20°N，东经115°E出发，以25节的速度向正东方向航行30分钟。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// setup.txt
+platform_type RED_DESTROYER WSF_PLATFORM
+    icon ship
+    mover WSF_SURFACE_MOVER
+    end_mover
+end_platform_type
+
+// scenarios/red_laydown.txt
+platform red_destroyer RED_DESTROYER
+    position 20:00:00.000n 115:00:00.000e
+    side red
+    icon destroyer
+
+    route
+        // Start point
+        position 20:00:00.000n 115:00:00.000e altitude 0.00 ft
+        speed 25 kts
+
+        // End point after 30 minutes at 25 kts (approx 12.5 nm East)
+        position 20:00:00.000n 115:12:30.000e altitude 0.00 ft
+    end_route
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 12] ###
+【需求内容】:
+12.[基础包含指令] 编写一个顶层场景文件，使用 include_once 指令分别包含 setup.txt、blue_platforms.txt 和 red_platforms.txt 三个文件。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// scenario_top.txt
+
+include_once setup.txt
+include_once blue_platforms.txt
+include_once red_platforms.txt
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 13] ###
+【需求内容】:
+13.[定义天线方向图] 请定义一个名为 OMNI_ANTENNA 的天线方向图。使用 rectangular_pattern（矩形方向图），峰值增益为10dB，方位角和仰角波束宽度均为360度（全向）。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// antenna_pattern_omni.txt
+antenna_pattern OMNI_ANTENNA rectangular_pattern
+    peak_gain 10 dB
+    azimuth_beamwidth 360 deg
+    elevation_beamwidth 360 deg
+end_rectangular_pattern
+end_antenna_pattern
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 14] ###
+【需求内容】:
+14.[简单组件连接] 在一个平台类型定义中，添加一个传感器 Search_Radar 和一个处理器 Track_Proc。请使用 internal_link 将传感器连接到处理器。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// platform_with_sensor_and_processor.txt
+
+platform_type EXAMPLE_PLATFORM WSF_PLATFORM
+    icon generic
+
+    sensor Search_Radar WSF_RADAR_SENSOR
+        // 传感器参数配置
+        one_m2_detect_range 50 nm
+        maximum_range 150 nm
+        frame_time 10 sec
+        // 将传感器连接到处理器 Track_Proc
+        internal_link Track_Proc
+    end_sensor
+
+    processor Track_Proc WSF_TRACK_PROCESSOR
+        purge_interval 60 seconds
+    end_processor
+
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 15] ###
+【需求内容】:
+15.[修改仿真时间] 编写一段代码，仅用于设置仿真的结束时间为1200秒。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// simulation_end_time.txt
+end_time 1200 s
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 16] ###
+【需求内容】:
+1.[空对空探测] 在模拟中，蓝方有一架预警机（AWACS）在北纬25°N，东经122°E盘旋。红方有一架战斗机从北纬26°N，东经121°E飞入。请配置AWACS上的雷达传感器，使其能够探测并跟踪红方战斗机（设置探测概率PD为0.9，虚警率为1e-6）。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// awacs_radar_setup.txt
+
+// 定义预警机雷达天线方向图
+antenna_pattern AWACS_RADAR_ANTENNA rectangular_pattern
+    peak_gain 35 dB
+    minimum_gain -10 dB
+    azimuth_beamwidth 120 deg
+    elevation_beamwidth 30 deg
+end_rectangular_pattern
+end_antenna_pattern
+
+// 定义预警机雷达传感器
+sensor AWACS_RADAR WSF_RADAR_SENSOR
+    // 检测能力
+    one_m2_detect_range 300 nm
+    maximum_range 400 nm
+    frame_time 5 sec
+    antenna_height 10 m
+    
+    // 扫描模式
+    scan_mode azimuth_and_elevation
+    azimuth_scan_limits -180 deg 180 deg
+    elevation_scan_limits -10 deg 30 deg
+    
+    // 发射机
+    transmitter
+        antenna_pattern AWACS_RADAR_ANTENNA
+        power 5000 kw
+        frequency 3000 mhz
+        internal_loss 2 dB
+    end_transmitter
+    
+    // 接收机
+    receiver
+        antenna_pattern AWACS_RADAR_ANTENNA
+        bandwidth 2 mhz
+        noise_power -160 dbw
+        internal_loss 7 dB
+    end_receiver
+    
+    // 跟踪要求
+    probability_of_false_alarm 1.0e-6
+    required_pd 0.9
+    swerling_case 1
+    hits_to_establish_track 5 3
+    hits_to_maintain_track 5 1
+    track_quality 0.6
+    
+    // 报告内容
+    reports_range
+    reports_bearing
+    reports_elevation
+    reports_iff
+    
+end_sensor
+
+// 定义预警机平台类型
+platform_type AWACS WSF_PLATFORM
+    icon awacs
+    
+    // 添加空中移动器
+    mover WSF_AIR_MOVER
+        altitude 30000 ft
+        speed 400 kts
+    end_mover
+    
+    // 添加雷达传感器
+    sensor awacs_radar AWACS_RADAR
+        on
+        internal_link data_mgr
+    end_sensor
+    
+    // 添加跟踪处理器
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 60 seconds
+    end_processor
+    
+end_platform_type
+
+// 定义红方战斗机平台类型
+platform_type FIGHTER WSF_PLATFORM
+    icon fighter
+    
+    // 添加空中移动器
+    mover WSF_AIR_MOVER
+        altitude 25000 ft
+        speed 500 kts
+    end_mover
+    
+    // 定义战斗机雷达特征
+    radar_signature FIGHTER_RADAR_SIG
+        constant 5 m^2
+    end_radar_signature
+    
+    // 应用雷达特征
+    radar_signature FIGHTER_RADAR_SIG
+    
+end_platform_type
+
+// 场景布局文件
+// scenarios/air_engagement.txt
+
+// 创建蓝方预警机实例
+platform awacs_1 AWACS
+    position 25:00:00.000n 122:00:00.000e
+    side blue
+    altitude 30000 ft
+    heading 0 deg
+    
+    // 盘旋航线
+    route
+        label Start
+        position 25:00:00.000n 122:00:00.000e altitude 30000 ft
+        speed 400 kts
+        
+        // 创建盘旋航点
+        position 25:05:00.000n 122:00:00.000e altitude 30000 ft
+        position 25:05:00.000n 122:05:00.000e altitude 30000 ft
+        position 25:00:00.000n 122:05:00.000e altitude 30000 ft
+        position 25:00:00.000n 122:00:00.000e altitude 30000 ft
+        
+        goto Start
+    end_route
+end_platform
+
+// 创建红方战斗机实例
+platform fighter_1 FIGHTER
+    position 26:00:00.000n 121:00:00.000e
+    side red
+    altitude 25000 ft
+    heading 90 deg
+    
+    // 飞行航线
+    route
+        position 26:00:00.000n 121:00:00.000e altitude 25000 ft
+        speed 500 kts
+        
+        position 26:00:00.000n 123:00:00.000e altitude 25000 ft
+        position 25:00:00.000n 124:00:00.000e altitude 25000 ft
+    end_route
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Expected value '3' to be >= 5 
+             'task1.txt', line 45, near column 32 
+-----------------
+
+**************************************************
+
+### [任务 17] ###
+【需求内容】:
+2.[武器杀伤效果] 定义一个名为 Frag_Warhead 的武器效果，使用 WSF_SPHERICAL_LETHALITY（球形杀伤）。设置最小杀伤半径为10米，最大杀伤半径为50米。在10米内造成100%伤害，50米处衰减至0%。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// Frag_Warhead.txt
+weapon_effects Frag_Warhead WSF_SPHERICAL_LETHALITY
+    minimum_radius 10 m
+    maximum_radius 50 m
+end_weapon_effects
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 18] ###
+【需求内容】:
+3.[定时开火脚本] 定义一个蓝方导弹发射车。编写一个 execute 脚本块，在仿真时间第300秒（绝对时间）时，向预先定义的红方目标（Target_1）发射一枚导弹。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// setup.txt
+platform_type BLUE_MLRS WSF_PLATFORM
+    icon truck
+    mover WSF_GROUND_MOVER
+    end_mover
+end_platform_type
+
+// 假设导弹武器定义在另一个文件，这里需要包含或定义
+// include_once weapons/missile.txt
+// 或者内联定义示例：
+platform_type MISSILE WSF_PLATFORM
+    icon missile
+    mover WSF_STRAIGHT_LINE_MOVER
+    end_mover
+end_platform_type
+
+weapon_effects MISSILE_EFFECTS WSF_SPHERICAL_LETHALITY
+    minimum_radius 500 m
+    maximum_radius 800 m
+end_weapon_effects
+
+weapon ANTI_TANK_MISSILE WSF_EXPLICIT_WEAPON
+    launched_platform_type MISSILE
+    weapon_effects MISSILE_EFFECTS
+end_weapon
+
+platform_type BLUE_MLRS WSF_PLATFORM
+    icon truck
+    mover WSF_GROUND_MOVER
+    end_mover
+
+    weapon at_missile ANTI_TANK_MISSILE
+        quantity 4
+    end_weapon
+
+    execute at_time 300 sec absolute
+        // 查找目标 Target_1
+        WsfTrack target = FindTrack("Target_1");
+        if (target.IsValid())
+        {
+            // 发射导弹
+            bool fired = Weapon("at_missile").FireSalvo(target, 1);
+            if (fired)
+            {
+                writeln(PLATFORM.Name(), " fired missile at Target_1 at time ", TIME_NOW);
+            }
+        }
+        else
+        {
+            writeln("Target_1 not found for ", PLATFORM.Name());
+        }
+    end_execute
+end_platform_type
+
+// scenarios/blue_laydown.txt
+platform blue_mlrs_1 BLUE_MLRS
+    position 25:00:00.000n 116:00:00.000e
+    side blue
+    heading 0 deg
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unable to compile script. 
+             'task1.txt', line 52, near column 16 
+-----------------
+
+**************************************************
+
+### [任务 19] ###
+【需求内容】:
+4.[通信与指挥链] 定义两个蓝方平台：Commander_Air 和 Wingman_Air。设置 Wingman_Air 的指挥官为 Commander_Air，并配置双方都拥有加入 "Blue_DataLink" 网络的通信设备。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// commander_air.txt
+platform_type COMMANDER_AIR WSF_PLATFORM
+    icon fighter
+    side blue
+
+    mover WSF_AIR_MOVER
+    end_mover
+
+    comm blue_comm WSF_COMM_TRANSCEIVER
+        network_name Blue_DataLink
+        internal_link data_mgr
+    end_comm
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+    end_processor
+end_platform_type
+
+// wingman_air.txt
+platform_type WINGMAN_AIR WSF_PLATFORM
+    icon fighter
+    side blue
+
+    mover WSF_AIR_MOVER
+    end_mover
+
+    comm blue_comm WSF_COMM_TRANSCEIVER
+        network_name Blue_DataLink
+        internal_link data_mgr
+    end_comm
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        report_to commander via blue_comm
+    end_processor
+end_platform_type
+
+// blue_laydown.txt
+platform commander_air COMMANDER_AIR
+    position 30:00:00.000n 80:00:00.000w
+    altitude 25000 ft
+    heading 0 deg
+end_platform
+
+platform wingman_air WINGMAN_AIR
+    position 30:01:00.000n 80:00:00.000w
+    altitude 25000 ft
+    heading 0 deg
+end_platform
+
+// command_chain.txt
+command_chain BLUE_AIR commander_air
+command_chain BLUE_AIR wingman_air
+----------------------------------------
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unknown command: command_chain 
+             'task1.txt', line 50, near column 14 
+-----------------
+**************************************************
+
+### [任务 20] ###
+【需求内容】:
+5.[传感器报告] 配置一个名为 Ground_Radar 的平台。在它的跟踪处理器（WSF_TRACK_PROCESSOR）中，使用 report_to 指令，通过 Comms_Device 将探测到的航迹报告给指挥官。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// ground_radar_platform.txt
+
+platform_type GROUND_RADAR WSF_PLATFORM
+    icon radar_station
+
+    // 定义通信设备
+    comm Comms_Device WSF_COMM_TRANSCEIVER
+        network_name radar_network
+        internal_link data_mgr
+    end_comm
+
+    // 定义跟踪处理器，并通过通信设备向指挥官报告航迹
+    processor data_mgr WSF_TRACK_PROCESSOR
+        report_to commander via Comms_Device
+    end_processor
+
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 21] ###
+【需求内容】:
+6.[导弹飞行剖面] 定义一枚巡航导弹。设置其飞行剖面：初始速度0.6马赫，在飞行100秒后加速至0.9马赫。请使用 tof_and_speed 块在移动器中实现这一速度变化。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// cruise_missile.txt
+
+platform_type CRUISE_MISSILE WSF_PLATFORM
+    icon missile
+    mover WSF_STRAIGHT_LINE_MOVER
+        update_interval 0.5 s
+        tof_and_speed
+            0.0   0.6 mach
+            100.0 0.9 mach
+        end_tof_and_speed
+    end_mover
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Bad value for: 0.0 
+             'task1.txt', line 8, near column 22 
+-----------------
+
+**************************************************
+
+### [任务 22] ###
+【需求内容】:
+7.[干扰机配置] 定义一个名为 Noise_Jammer 的隐式武器（WSF_RF_JAMMER）。设置其发射功率为500瓦，工作频段为2000MHz到4000MHz，并将其安装在红方电子战飞机上。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// noise_jammer_definition.txt
+
+// 定义干扰机天线方向图
+antenna_pattern NOISE_JAMMER_ANTENNA rectangular_pattern
+    peak_gain 10 dB
+    minimum_gain -10 dB
+    azimuth_beamwidth 360 deg
+    elevation_beamwidth 180 deg
+end_rectangular_pattern
+end_antenna_pattern
+
+// 定义隐式武器：噪声干扰机
+weapon Noise_Jammer WSF_RF_JAMMER
+    maximum_number_of_spots 1
+    slew_mode fixed
+    maximum_range 100 km
+    
+    // 发射机配置
+    transmitter
+        antenna_pattern NOISE_JAMMER_ANTENNA
+        frequency_band 2000 mhz 4000 mhz
+        power 500.0 w
+        internal_loss 0.0 db
+    end_transmitter
+end_weapon
+
+// red_ew_aircraft.txt
+
+platform_type RED_EW_AIRCRAFT WSF_PLATFORM
+    icon fighter
+    side red
+    
+    mover WSF_AIR_MOVER
+    end_mover
+    
+    // 安装噪声干扰机
+    weapon noise_jammer Noise_Jammer
+    end_weapon
+    
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 23] ###
+【需求内容】:
+8.[简单的交战逻辑] 蓝方坦克遇到红方装甲车。请编写逻辑：如果红方装甲车进入蓝方坦克2公里范围内，蓝方坦克自动发射一枚反坦克导弹（假设导弹名为 ATM-1）。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// blue_tank_script.txt
+platform_type BLUE_TANK WSF_PLATFORM
+    icon tank
+    mover WSF_GROUND_MOVER
+    end_mover
+
+    // 假设 ATM-1 武器已定义并包含在 setup.txt 中
+    weapon atm-1 ATM-1
+        quantity 10
+    end_weapon
+
+    processor engage_logic WSF_SCRIPT_PROCESSOR
+        script_variables
+            double engagement_range = 2000.0; // 2 公里，单位米
+            bool target_engaged = false;
+        end_script_variables
+
+        update_interval 1.0 s
+
+        on_update
+            // 遍历主跟踪列表，寻找红方装甲车目标
+            for (int i = 0; i < PLATFORM.MasterTrackList().Count(); i += 1)
+            {
+                WsfTrack current_track = PLATFORM.MasterTrackList().TrackEntry(i);
+                // 检查目标是否为红方装甲车 (假设平台类型名为 RED_APC)
+                // 实际应用中可能需要更精确的识别逻辑 (如检查 Side, PlatformTypeName 等)
+                if (current_track.Side() == "red" && !target_engaged)
+                {
+                    double range_to_target = PLATFORM.GroundRangeTo(current_track);
+                    if (range_to_target <= engagement_range)
+                    {
+                        WsfWeapon atm1 = PLATFORM.Weapon("atm-1");
+                        if (atm1.IsValid() && atm1.QuantityRemaining() > 0)
+                        {
+                            bool fired = atm1.FireSalvo(current_track, 1);
+                            if (fired)
+                            {
+                                writeln(TIME_NOW, "s: ", PLATFORM.Name(), " fired ATM-1 at ", current_track.TargetName(), " at range ", range_to_target, " m");
+                                target_engaged = true;
+                                break; // 一次只攻击一个目标
+                            }
+                        }
+                    }
+                }
+            }
+        end_on_update
+    end_processor
+end_platform_type
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Could not find weapon ATM-1 
+             'task1.txt', line 8, near column 23 
+-----------------
+
+**************************************************
+
+### [任务 24] ###
+【需求内容】:
+9.[多路点巡逻] 定义一架无人机执行巡逻任务。设置4个航路点形成一个矩形区域。要求无人机在到达最后一个航路点后，使用 goto 指令跳转回第一个航路点，形成通过 route 定义的死循环巡逻。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// uav_patrol_route.txt
+
+platform_type UAV WSF_PLATFORM
+    icon uav
+    mover WSF_AIR_MOVER
+        maximum_linear_acceleration 2.0 m/s^2
+        maximum_radial_acceleration 2.0 m/s^2
+        maximum_altitude 5000 m
+        minimum_altitude 100 m
+        turn_rate_limit 30 deg/s
+    end_mover
+end_platform_type
+
+platform uav_patrol UAV
+    position 30:00:00.000n 80:00:00.000w
+    side blue
+    altitude 3000 ft
+    heading 0 deg
+
+    route
+        // 航点 0 (起点/循环点)
+        label Start
+        position 30:00:00.000n 80:00:00.000w altitude 3000 ft
+        speed 150 kts
+
+        // 航点 1
+        position 30:05:00.000n 80:00:00.000w altitude 3000 ft
+
+        // 航点 2
+        position 30:05:00.000n 80:05:00.000w altitude 3000 ft
+
+        // 航点 3
+        position 30:00:00.000n 80:05:00.000w altitude 3000 ft
+
+        // 航点 4 (最后一个航点，跳回起点)
+        position 30:00:00.000n 80:00:00.000w altitude 3000 ft
+
+        goto Start // 形成死循环巡逻
+    end_route
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+编译通过
+-----------------
+
+**************************************************
+
+### [任务 25] ###
+【需求内容】:
+10.[复杂特征定义] 定义一个飞机的雷达散射截面（RCS）。要求使用内联表（inline_table），定义其在不同方位角（-180到180度）下的RCS值，模拟机头方向RCS小，侧向RCS大的特性。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// aircraft_rcs_signature.txt
+radar_signature AIRCRAFT_RCS_SIGNATURE
+    state default
+        inline_table dbsm 37 5 // 单位：dbsm，方位角37个点，仰角5个点
+            // 仰角坐标（度）：-90, -45, 0, 45, 90
+            -90.0 -45.0 0.0 45.0 90.0
+
+            // 方位角 -180 度：机尾方向，RCS较大
+            -180.0 10.0 10.0 10.0 10.0 10.0
+            // 方位角 -170 度
+            -170.0 9.0 9.0 9.0 9.0 9.0
+            // 方位角 -160 度
+            -160.0 8.0 8.0 8.0 8.0 8.0
+            // 方位角 -150 度
+            -150.0 7.0 7.0 7.0 7.0 7.0
+            // 方位角 -140 度
+            -140.0 6.0 6.0 6.0 6.0 6.0
+            // 方位角 -130 度
+            -130.0 5.0 5.0 5.0 5.0 5.0
+            // 方位角 -120 度
+            -120.0 4.0 4.0 4.0 4.0 4.0
+            // 方位角 -110 度
+            -110.0 3.0 3.0 3.0 3.0 3.0
+            // 方位角 -100 度
+            -100.0 2.0 2.0 2.0 2.0 2.0
+            // 方位角 -90 度：正侧向，RCS最大
+            -90.0 15.0 15.0 15.0 15.0 15.0
+            // 方位角 -80 度
+            -80.0 14.0 14.0 14.0 14.0 14.0
+            // 方位角 -70 度
+            -70.0 13.0 13.0 13.0 13.0 13.0
+            // 方位角 -60 度
+            -60.0 12.0 12.0 12.0 12.0 12.0
+            // 方位角 -50 度
+            -50.0 11.0 11.0 11.0 11.0 11.0
+            // 方位角 -40 度
+            -40.0 10.0 10.0 10.0 10.0 10.0
+            // 方位角 -30 度
+            -30.0 9.0 9.0 9.0 9.0 9.0
+            // 方位角 -20 度
+            -20.0 8.0 8.0 8.0 8.0 8.0
+            // 方位角 -10 度
+            -10.0 7.0 7.0 7.0 7.0 7.0
+            // 方位角 0 度：机头方向，RCS最小
+            0.0 1.0 1.0 1.0 1.0 1.0
+            // 方位角 10 度
+            10.0 2.0 2.0 2.0 2.0 2.0
+            // 方位角 20 度
+            20.0 3.0 3.0 3.0 3.0 3.0
+            // 方位角 30 度
+            30.0 4.0 4.0 4.0 4.0 4.0
+            // 方位角 40 度
+            40.0 5.0 5.0 5.0 5.0 5.0
+            // 方位角 50 度
+            50.0 6.0 6.0 6.0 6.0 6.0
+            // 方位角 60 度
+            60.0 7.0 7.0 7.0 7.0 7.0
+            // 方位角 70 度
+            70.0 8.0 8.0 8.0 8.0 8.0
+            // 方位角 80 度
+            80.0 9.0 9.0 9.0 9.0 9.0
+            // 方位角 90 度：正侧向，RCS最大
+            90.0 15.0 15.0 15.0 15.0 15.0
+            // 方位角 100 度
+            100.0 14.0 14.0 14.0 14.0 14.0
+            // 方位角 110 度
+            110.0 13.0 13.0 13.0 13.0 13.0
+            // 方位角 120 度
+            120.0 12.0 12.0 12.0 12.0 12.0
+            // 方位角 130 度
+            130.0 11.0 11.0 11.0 11.0 11.0
+            // 方位角 140 度
+            140.0 10.0 10.0 10.0 10.0 10.0
+            // 方位角 150 度
+            150.0 9.0 9.0 9.0 9.0 9.0
+            // 方位角 160 度
+            160.0 8.0 8.0 8.0 8.0 8.0
+            // 方位角 170 度
+            170.0 7.0 7.0 7.0 7.0 7.0
+            // 方位角 180 度：机尾方向，RCS较大
+            180.0 10.0 10.0 10.0 10.0 10.0
+        end_inline_table
+    end_state
+end_radar_signature
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unknown command: end_state 
+             'task1.txt', line 82, near column 14 
+-----------------
+
+**************************************************
+
+### [任务 26] ###
+【需求内容】:
+1.[IADS（综合防空系统）仿真] 构建一个红方综合防空系统。包含一个远程预警雷达（EW_Radar）、一个指挥中心（Command_Post）和一个萨姆导弹连（SAM_Site）。
+EW_Radar 探测到蓝方目标后，通过通信网络将航迹发送给 Command_Post。
+Command_Post 将目标指派给 SAM_Site。
+SAM_Site 的火控雷达开机并锁定目标，随后发射两枚导弹。 请生成包含平台定义、通信链接、指挥链设置和自动报告逻辑的代码。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// 文件名: red_iads_system.txt
+
+// 1. 定义平台类型
+platform_type EW_Radar WSF_PLATFORM
+    icon radar
+    radar_signature VEHICLE_RADAR_SIGNATURE
+
+    sensor search_radar WSF_RADAR_SENSOR
+        one_m2_detect_range 300 nm
+        maximum_range 400 nm
+        frame_time 5 sec
+        antenna_height 10 m
+        scan_mode azimuth_and_elevation
+        azimuth_scan_limits -180 deg 180 deg
+        elevation_scan_limits 0 deg 30 deg
+        transmitter
+            antenna_pattern ACQ_RADAR_ANTENNA
+            power 5000 kw
+            frequency 1000 mhz
+        end_transmitter
+        receiver
+            antenna_pattern ACQ_RADAR_ANTENNA
+            bandwidth 5 mhz
+            noise_power -150 dbw
+        end_receiver
+        reports_range
+        reports_bearing
+        reports_elevation
+        internal_link data_mgr
+    end_sensor
+
+    comm radar_comm WSF_COMM_TRANSCEIVER
+        network_name red_iads_net
+        internal_link data_mgr
+    end_comm
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 60 seconds
+        report_to command_chain RED_IADS commander via radar_comm
+    end_processor
+end_platform_type
+
+platform_type Command_Post WSF_PLATFORM
+    icon command_post
+    radar_signature VEHICLE_RADAR_SIGNATURE
+
+    comm cp_comm WSF_COMM_TRANSCEIVER
+        network_name red_iads_net
+        internal_link data_mgr
+        internal_link task_mgr
+    end_comm
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 60 seconds
+    end_processor
+
+    processor task_mgr WSF_TASK_PROCESSOR
+        internal_link data_mgr
+    end_processor
+end_platform_type
+
+platform_type SAM_Site WSF_PLATFORM
+    icon sam_site
+    radar_signature VEHICLE_RADAR_SIGNATURE
+
+    sensor fire_control_radar WSF_RADAR_SENSOR
+        one_m2_detect_range 50 nm
+        maximum_range 80 nm
+        frame_time 2 sec
+        antenna_height 5 m
+        scan_mode azimuth_and_elevation
+        azimuth_scan_limits -60 deg 60 deg
+        elevation_scan_limits 0 deg 60 deg
+        transmitter
+            antenna_pattern ACQ_RADAR_ANTENNA
+            power 1000 kw
+            frequency 8000 mhz
+        end_transmitter
+        receiver
+            antenna_pattern ACQ_RADAR_ANTENNA
+            bandwidth 10 mhz
+            noise_power -140 dbw
+        end_receiver
+        reports_range
+        reports_bearing
+        reports_elevation
+        internal_link data_mgr
+    end_sensor
+
+    comm sam_comm WSF_COMM_TRANSCEIVER
+        network_name red_iads_net
+        internal_link data_mgr
+        internal_link task_mgr
+    end_comm
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 60 seconds
+    end_processor
+
+    processor task_mgr WSF_TASK_PROCESSOR
+        internal_link data_mgr
+    end_processor
+
+    weapon sam_missile SAM_MISSILE
+        quantity 4
+    end_weapon
+end_platform_type
+
+// 2. 定义指挥链
+command_chain RED_IADS Command_Post
+command_chain RED_IADS EW_Radar
+command_chain RED_IADS SAM_Site
+
+// 3. 定义导弹武器系统
+platform_type SAM_MISSILE WSF_PLATFORM
+    icon missile
+    radar_signature ATA_MISSILE_SIG
+
+    mover WSF_STRAIGHT_LINE_MOVER
+        update_interval 0.5 s
+        tof_and_speed
+            0.0 2000 kts
+            10.0 1800 kts
+            20.0 1600 kts
+        end_tof_and_speed
+        maximum_lateral_acceleration 15.0 g
+        guidance_mode lead_pursuit
+    end_mover
+
+    processor tracker WSF_PERFECT_TRACKER
+        update_interval 1.0 s
+    end_processor
+
+    processor fuse WSF_AIR_TARGET_FUSE
+        max_time_of_flight_to_detonate 30 s
+    end_processor
+end_platform_type
+
+weapon_effects SAM_MISSILE_EFFECTS WSF_SPHERICAL_LETHALITY
+    minimum_radius 20 m
+    maximum_radius 50 m
+end_weapon_effects
+
+weapon SAM_MISSILE WSF_EXPLICIT_WEAPON
+    launched_platform_type SAM_MISSILE
+    weapon_effects SAM_MISSILE_EFFECTS
+end_weapon
+
+// 4. 定义天线模式（供雷达使用）
+antenna_pattern ACQ_RADAR_ANTENNA rectangular_pattern
+    peak_gain 40 dB
+    minimum_gain -20 db
+    azimuth_beamwidth 3 deg
+    elevation_beamwidth 3 deg
+end_rectangular_pattern
+end_antenna_pattern
+
+// 5. 定义平台实例（场景布局）
+platform ew_radar_1 EW_Radar
+    position 30:00:00.000n 80:00:00.000w
+    side red
+    altitude 100 ft
+    heading 0 deg
+end_platform
+
+platform command_post_1 Command_Post
+    position 30:05:00.000n 80:05:00.000w
+    side red
+    altitude 0 ft
+    heading 0 deg
+end_platform
+
+platform sam_site_1 SAM_Site
+    position 30:10:00.000n 80:10:00.000w
+    side red
+    altitude 0 ft
+    heading 0 deg
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unknown command: command_chain 
+             'task1.txt', line 110, near column 14 
+-----------------
+
+**************************************************
+
+### [任务 27] ###
+【需求内容】:
+2.[复杂的空战脚本处理器] 为一架先进战斗机定义一个自定义脚本处理器 Advanced_Tactics_Processor。
+在 script_variables 中定义导弹剩余量和交战状态。
+在 on_update 块中（每1秒更新一次）：遍历主航迹列表，寻找敌方目标。
+如果目标距离小于40公里且高度高于5000米，并且导弹库存大于0，则发射导弹。
+发射后打印日志："Fighter engaged target [TargetName] at time [Time]"。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// Advanced_Tactics_Processor.txt
+
+processor Advanced_Tactics_Processor WSF_SCRIPT_PROCESSOR
+    update_interval 1.0 s
+
+    script_variables
+        int missile_inventory = 4
+        Map<string, bool> engagement_status = Map<string, bool>()
+    end_script_variables
+
+    on_update
+        for (int i = 0; i < PLATFORM.MasterTrackList().Count(); i += 1)
+        {
+            WsfTrack current_track = PLATFORM.MasterTrackList().TrackEntry(i);
+            string target_name = current_track.TargetName();
+
+            // 检查目标是否为敌方且尚未交战
+            if (current_track.Side() != PLATFORM.Side() && !engagement_status.ContainsKey(target_name))
+            {
+                double range_to_target = PLATFORM.GroundRangeTo(current_track);
+                double target_altitude = current_track.Altitude();
+
+                // 交战条件：距离 < 40km, 目标高度 > 5000m, 有导弹
+                if (range_to_target < 40.0 km && target_altitude > 5000.0 m && missile_inventory > 0)
+                {
+                    // 假设武器名为 "air_to_air_missile"
+                    WsfWeapon missile = PLATFORM.Weapon("air_to_air_missile");
+                    if (missile.IsValid() && missile.QuantityRemaining() > 0)
+                    {
+                        bool fired = missile.FireSalvo(current_track, 1);
+                        if (fired)
+                        {
+                            missile_inventory -= 1;
+                            engagement_status[target_name] = true;
+                            writeln("Fighter engaged target ", target_name, " at time ", TIME_NOW);
+                        }
+                    }
+                }
+            }
+        }
+    end_on_update
+
+end_processor
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** ERROR: ";" expected 
+    File: task1.txt 
+    Line: 8 
+    Column: 9 
+            Map<string, bool> engagement_status = Map<string, bool>() 
+            ^ 
+***** ERROR: ";" expected 
+    File: task1.txt 
+    Line: 9 
+    Column: 4 
+        end_script_variables 
+       ^ 
+***** ERROR: Error in script. 
+    Global context 
+
+Loading simulation input complete. 
+    Elapsed Wall Clock Time: 0.116519 
+    Elapsed Processor Time : 0.078125 
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unable to compile script. 
+             'task1.txt', line 9, near column 25 
+-----------------
+
+**************************************************
+
+### [任务 28] ###
+【需求内容】:
+3.[多阶段弹道导弹拦截] 红方发射一枚弹道导弹（TBM），具有助推段、中段和再入段（速度和高度随时间显著变化）。 蓝方部署一艘装备有雷达和拦截弹的驱逐舰。
+定义 TBM 的复杂运动特性（高抛弹道）。
+定义蓝方拦截弹 Interceptor，具备极高的加速度（20G）和由 WSF_GUIDANCE_COMPUTER 控制的比例导引律。
+在仿真第200秒，TBM进入蓝方雷达范围，蓝方自动发射拦截弹。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// tbm_interception_scenario.txt
+
+// 1. 定义弹道导弹 (TBM) 平台类型
+platform_type TBM WSF_PLATFORM
+    icon missile
+    radar_signature TBM_RADAR_SIGNATURE
+
+    mover WSF_STRAIGHT_LINE_MOVER
+        update_interval 1.0 s
+        // 定义高抛弹道：时间(秒) 速度(节) 高度(英尺)
+        tof_and_speed
+            0.0   5000 kts    // 助推段开始
+            60.0  8000 kts    // 助推段结束
+            120.0 6000 kts    // 中段开始
+            300.0 5500 kts    // 中段
+            400.0 7000 kts    // 再入段开始
+            450.0 9000 kts    // 再入段结束
+        end_tof_and_speed
+        // 定义高度剖面：时间(秒) 高度(英尺)
+        altitude_profile
+            0.0   0 ft        // 发射
+            60.0  200000 ft   // 助推段结束
+            120.0 500000 ft   // 中段顶点
+            300.0 450000 ft   // 中段
+            400.0 100000 ft   // 再入段开始
+            450.0 0 ft        // 命中
+        end_altitude_profile
+        maximum_lateral_acceleration 2.0 g
+    end_mover
+end_platform_type
+
+// 2. 定义蓝方驱逐舰平台类型
+platform_type BLUE_DESTROYER WSF_PLATFORM
+    icon ship
+    radar_signature SHIP_RADAR_SIGNATURE
+
+    sensor search_radar WSF_RADAR_SENSOR
+        one_m2_detect_range 200 nm
+        maximum_range 250 nm
+        frame_time 2 sec
+        antenna_height 20 m
+        scan_mode azimuth_and_elevation
+        azimuth_scan_limits -180 deg 180 deg
+        elevation_scan_limits 0 deg 90 deg
+        transmitter
+            antenna_pattern SHIP_RADAR_ANTENNA
+            power 10000 kw
+            frequency 3000 mhz
+        end_transmitter
+        receiver
+            antenna_pattern SHIP_RADAR_ANTENNA
+            bandwidth 10 mhz
+            noise_power -145 dbw
+        end_receiver
+        reports_range
+        reports_bearing
+        reports_elevation
+        internal_link data_mgr
+    end_sensor
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 30 seconds
+    end_processor
+
+    processor interceptor_control WSF_SCRIPT_PROCESSOR
+        script_variables
+            bool tbm_detected = false
+            bool interceptor_launched = false
+        end_script_variables
+
+        update_interval 1.0 s
+        on_update
+            if (!tbm_detected)
+            {
+                // 检查是否探测到TBM
+                for (int i=0; i < PLATFORM.MasterTrackList().Count(); i+=1)    
+                {
+                    WsfTrack track = PLATFORM.MasterTrackList().TrackEntry(i); 
+                    if (track.Side() == "red" && track.TypeName() == "TBM")    
+                    {
+                        tbm_detected = true;
+                        writeln("TBM detected at time: ", TIME_NOW);
+                        break;
+                    }
+                }
+            }
+
+            if (tbm_detected && !interceptor_launched)
+            {
+                // 发射拦截弹
+                WsfWeapon interceptor = PLATFORM.Weapon("interceptor");        
+                if (interceptor.IsValid() && interceptor.QuantityRemaining() > 0)
+                {
+                    // 获取TBM航迹
+                    for (int i=0; i < PLATFORM.MasterTrackList().Count(); i+=1)
+                    {
+                        WsfTrack track = PLATFORM.MasterTrackList().TrackEntry(i);
+                        if (track.Side() == "red" && track.TypeName() == "TBM")
+                        {
+                            bool launched = interceptor.FireSalvo(track, 1);   
+                            if (launched)
+                            {
+                                interceptor_launched = true;
+                                writeln("Interceptor launched at time: ", TIME_NOW);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        end_on_update
+    end_processor
+
+    weapon interceptor INTERCEPTOR_MISSILE
+        quantity 2
+    end_weapon
+end_platform_type
+
+// 3. 定义拦截弹平台类型
+platform_type INTERCEPTOR_MISSILE WSF_PLATFORM
+    icon missile
+    radar_signature INTERCEPTOR_RADAR_SIGNATURE
+
+    mover WSF_STRAIGHT_LINE_MOVER
+        update_interval 0.1 s
+        tof_and_speed
+            0.0   1000 kts
+            5.0   5000 kts
+            10.0  8000 kts
+            20.0  10000 kts
+        end_tof_and_speed
+        maximum_lateral_acceleration 20.0 g  // 20G加速度
+        guidance_mode proportional_navigation
+    end_mover
+
+    processor guidance WSF_GUIDANCE_COMPUTER
+        update_interval 0.1 s
+        guidance_law proportional_navigation
+        navigation_constant 4.0
+    end_processor
+
+    processor fuse WSF_AIR_TARGET_FUSE
+        max_time_of_flight_to_detonate 60 s
+        proximity_fuse_range 50 m
+    end_processor
+end_platform_type
+
+// 4. 定义武器效果
+weapon_effects INTERCEPTOR_EFFECTS WSF_SPHERICAL_LETHALITY
+    minimum_radius 30 m
+    maximum_radius 100 m
+end_weapon_effects
+
+weapon INTERCEPTOR_MISSILE WSF_EXPLICIT_WEAPON
+    launched_platform_type INTERCEPTOR_MISSILE
+    weapon_effects INTERCEPTOR_EFFECTS
+end_weapon
+
+// 5. 定义天线模式
+antenna_pattern SHIP_RADAR_ANTENNA rectangular_pattern
+    peak_gain 45 dB
+    minimum_gain -25 db
+    azimuth_beamwidth 2 deg
+    elevation_beamwidth 2 deg
+end_rectangular_pattern
+end_antenna_pattern
+
+// 6. 定义特征
+radar_signature TBM_RADAR_SIGNATURE
+    constant 0.1 m^2
+end_radar_signature
+
+radar_signature SHIP_RADAR_SIGNATURE
+    constant 1000 m^2
+end_radar_signature
+
+radar_signature INTERCEPTOR_RADAR_SIGNATURE
+    constant 0.05 m^2
+end_radar_signature
+
+// 7. 定义平台实例
+platform tbm_1 TBM
+    position 30:30:00.000n 81:00:00.000w
+    side red
+    altitude 0 ft
+    heading 90 deg
+
+    // 在仿真开始时发射
+    execute at time 0 sec absolute
+        // 导弹自动开始飞行（由mover定义弹道）
+    end_execute
+end_platform
+
+platform blue_destroyer_1 BLUE_DESTROYER
+    position 30:00:00.000n 80:30:00.000w
+    side blue
+    altitude 0 ft
+    heading 0 deg
+
+    // 在仿真第200秒激活拦截逻辑
+    execute at time 200 sec absolute
+        // 处理器会自动检测和发射
+    end_execute
+end_platform
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Bad value for: 0.0 
+             'task1.txt', line 12, near column 23 
+-----------------
+
+**************************************************
+
+### [任务 29] ###
+【需求内容】:
+4.[海空协同反舰任务] 蓝方任务：一架侦察机（Recon-1）和两架攻击机（Striker-1, Striker-2）。
+Recon-1 沿海岸线侦察，发现红方军舰后，通过数据链广播目标位置。
+Striker-1 和 Striker-2 接收到目标后，分别从不同角度（航向差90度）接近目标。
+当两者距离目标均小于50公里时，同时（时间差不超过5秒）发射反舰导弹，实现饱和攻击。
+提示：需要使用脚本中的逻辑判断和协调时间。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// 文件名: blue_strike_mission.txt
+
+// 1. 定义平台类型
+platform_type RECON_AIRCRAFT WSF_PLATFORM
+    icon recon
+    radar_signature AIRCRAFT_RADAR_SIGNATURE
+
+    mover WSF_AIR_MOVER
+        maximum_linear_acceleration 2.0 g
+        maximum_radial_acceleration 3.0 g
+        maximum_altitude 50000 ft
+        minimum_altitude 10000 ft
+        roll_rate_limit 30 deg/s
+        turn_rate_limit 15 deg/s
+    end_mover
+
+    sensor recon_sensor WSF_RADAR_SENSOR
+        one_m2_detect_range 100 nm
+        maximum_range 150 nm
+        frame_time 3 sec
+        antenna_height 2 m
+        scan_mode azimuth_and_elevation
+        azimuth_scan_limits -60 deg 60 deg
+        elevation_scan_limits -30 deg 30 deg
+        transmitter
+            antenna_pattern RECON_ANTENNA
+            power 500 kw
+            frequency 9000 mhz
+        end_transmitter
+        receiver
+            antenna_pattern RECON_ANTENNA
+            bandwidth 20 mhz
+            noise_power -140 dbw
+        end_receiver
+        reports_range
+        reports_bearing
+        reports_elevation
+        internal_link data_mgr
+    end_sensor
+
+    comm recon_comm WSF_COMM_TRANSCEIVER
+        network_name blue_strike_net
+        internal_link data_mgr
+    end_comm
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 30 seconds
+        report_to_group blue_strike_group via recon_comm
+    end_processor
+
+    processor recon_logic WSF_SCRIPT_PROCESSOR
+        script_variables
+            bool target_reported = false
+            string target_name = ""
+        end_script_variables
+
+        update_interval 5.0 s
+        on_update
+            if (!target_reported)
+            {
+                // 检查是否发现红方军舰
+                for (int i=0; i < PLATFORM.MasterTrackList().Count(); i+=1)    
+                {
+                    WsfTrack track = PLATFORM.MasterTrackList().TrackEntry(i); 
+                    if (track.Side() == "red" && (track.TypeName() == "SHIP" || track.TypeName() == "CARRIER"))
+                    {
+                        target_name = track.TargetName();
+                        target_reported = true;
+                        writeln(PLATFORM.Name(), " detected red ship: ", target_name, " at time: ", TIME_NOW);
+                        break;
+                    }
+                }
+            }
+        end_on_update
+    end_processor
+end_platform_type
+
+platform_type STRIKE_AIRCRAFT WSF_PLATFORM
+    icon fighter
+    radar_signature AIRCRAFT_RADAR_SIGNATURE
+
+    mover WSF_AIR_MOVER
+        maximum_linear_acceleration 3.0 g
+        maximum_radinal_acceleration 4.0 g
+        maximum_altitude 40000 ft
+        minimum_altitude 5000 ft
+        roll_rate_limit 40 deg/s
+        turn_rate_limit 20 deg/s
+    end_mover
+
+    comm strike_comm WSF_COMM_TRANSCEIVER
+        network_name blue_strike_net
+        internal_link data_mgr
+        internal_link strike_logic
+    end_comm
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 30 seconds
+    end_processor
+
+    processor strike_logic WSF_SCRIPT_PROCESSOR
+        script_variables
+            bool target_acquired = false
+            bool in_position = false
+            bool missile_launched = false
+            double attack_distance = 50.0 km
+            double launch_time = 0.0
+            string target_name = ""
+            WsfTrack target_track = {}
+        end_script_variables
+
+        update_interval 2.0 s
+        on_update
+            if (!target_acquired)
+            {
+                // 从数据链获取目标
+                for (int i=0; i < PLATFORM.MasterTrackList().Count(); i+=1)    
+                {
+                    WsfTrack track = PLATFORM.MasterTrackList().TrackEntry(i); 
+                    if (track.Side() == "red" && (track.TypeName() == "SHIP" || track.TypeName() == "CARRIER"))
+                    {
+                        target_track = track;
+                        target_name = track.TargetName();
+                        target_acquired = true;
+                        writeln(PLATFORM.Name(), " acquired target: ", target_name);
+                        break;
+                    }
+                }
+            }
+
+            if (target_acquired && !in_position)
+            {
+                // 检查是否进入攻击位置
+                double distance = PLATFORM.GroundRangeTo(target_track);        
+                if (distance < attack_distance)
+                {
+                    in_position = true;
+                    writeln(PLATFORM.Name(), " in position at distance: ", distance, " at time: ", TIME_NOW);
+
+                    // 发送就位消息
+                    // 这里可以添加消息发送逻辑
+                }
+            }
+
+            if (in_position && !missile_launched)
+            {
+                // 等待协调攻击时间
+                // 这里需要协调逻辑，简化处理：等待5秒后发射
+                if (TIME_NOW > 300.0) // 假设任务开始后300秒
+                {
+                    WsfWeapon asm = PLATFORM.Weapon("anti_ship_missile");      
+                    if (asm.IsValid() && asm.QuantityRemaining() > 0)
+                    {
+                        bool launched = asm.FireSalvo(target_track, 2);        
+                        if (launched)
+                        {
+                            missile_launched = true;
+                            launch_time = TIME_NOW;
+                            writeln(PLATFORM.Name(), " launched ASM at time: ", launch_time);
+                        }
+                    }
+                }
+            }
+        end_on_update
+    end_processor
+
+    weapon anti_ship_missile ANTI_SHIP_MISSILE
+        quantity 4
+    end_weapon
+end_platform_type
+
+// 2. 定义反舰导弹
+platform_type ANTI_SHIP_MISSILE WSF_PLATFORM
+    icon missile
+    radar_signature ASM_RADAR_SIGNATURE
+
+    mover WSF_STRAIGHT_LINE_MOVER
+        update_interval 0.5 s
+        tof_and_speed
+            0.0   600 kts
+            10.0  800 kts
+            30.0  1000 kts
+            60.0  1200 kts
+        end_tof_and_speed
+        maximum_lateral_acceleration 5.0 g
+        guidance_mode proportional_navigation
+    end_mover
+
+    processor guidance WSF_GUIDANCE_COMPUTER
+        update_interval 0.5 s
+        guidance_law proportional_navigation
+        navigation_constant 3.5
+    end_processor
+
+    processor fuse WSF_SURFACE_TARGET_FUSE
+        max_time_of_flight_to_detonate 120 s
+        proximity_fuse_range 20 m
+    end_processor
+end_platform_type
+
+weapon_effects ASM_EFFECTS WSF_SPHERICAL_LETHALITY
+    minimum_radius 15 m
+    maximum_radius 40 m
+end_weapon_effects
+
+weapon ANTI_SHIP_MISSILE WSF_EXPLICIT_WEAPON
+    launched_platform_type ANTI_SHIP_MISSILE
+    weapon_effects ASM_EFFECTS
+end_weapon
+
+// 3. 定义天线模式
+antenna_pattern RECON_ANTENNA rectangular_pattern
+    peak_gain 35 dB
+    minimum_gain -15 db
+    azimuth_beamwidth 5 deg
+    elevation_beamwidth 5 deg
+end_rectangular_pattern
+end_antenna_pattern
+
+// 4. 定义特征
+radar_signature AIRCRAFT_RADAR_SIGNATURE
+    constant 5.0 m^2
+end_radar_signature
+
+radar_signature ASM_RADAR_SIGNATURE
+    constant 0.1 m^2
+end_radar_signature
+
+// 5. 定义平台实例
+platform recon_1 RECON_AIRCRAFT
+    position 30:00:00.000n 81:30:00.000w
+    side blue
+    altitude 25000 ft
+    heading 180 deg
+
+    route
+        label Start
+        position 30:00:00.000n 81:30:00.000w altitude 25000 ft
+        speed 400 kts
+
+        position 29:30:00.000n 81:30:00.000w altitude 25000 ft
+
+        position 29:30:00.000n 81:00:00.000w altitude 25000 ft
+
+        position 30:00:00.000n 81:00:00.000w altitude 25000 ft
+
+        goto Start
+    end_route
+end_platform
+
+platform striker_1 STRIKE_AIRCRAFT
+    position 30:30:00.000n 82:00:00.000w
+    side blue
+    altitude 20000 ft
+    heading 90 deg
+
+    route
+        label Hold
+        position 30:30:00.000n 82:00:00.000w altitude 20000 ft
+        speed 350 kts
+
+        // 等待目标信息后转向攻击
+    end_route
+end_platform
+
+platform striker_2 STRIKE_AIRCRAFT
+    position 29:30:00.000n 82:00:00.000w
+    side blue
+    altitude 20000 ft
+    heading 270 deg
+
+    route
+        label Hold
+        position 29:30:00.000n 82:00:00.000w altitude 20000 ft
+        speed 350 kts
+
+        // 等待目标信息后转向攻击
+    end_route
+end_platform
+
+// 6. 定义红方军舰（目标）
+platform red_ship_1 SHIP
+    position 29:45:00.000n 81:15:00.000w
+    side red
+    altitude 0 ft
+    heading 0 deg
+    icon carrier
+
+    route
+        position 29:45:00.000n 81:15:00.000w altitude 0 ft
+        speed 20 kts
+
+        position 29:40:00.000n 81:10:00.000w altitude 0 ft
+
+        position 29:35:00.000n 81:15:00.000w altitude 0 ft
+    end_route
+end_platform
+
+// 7. 定义组和指挥链
+group blue_strike_group
+    recon_1
+    striker_1
+    striker_2
+end_group
+
+command_chain BLUE_STRIKE recon_1
+command_chain BLUE_STRIKE striker_1
+command_chain BLUE_STRIKE striker_2
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unknown command: command_chain 
+             'task1.txt', line 306, near column 14 
+-----------------
+
+**************************************************
+
+### [任务 30] ###
+【需求内容】:
+5.[高保真传感器与电子战对抗] 模拟电子干扰场景。
+蓝方飞机装备 WSF_RADAR_SENSOR，具有特定的扫描模式（方位扫描+/-60度）和天线方向图（Sinc函数）。
+红方地面站装备 WSF_RF_JAMMER。
+当蓝方飞机进入红方干扰范围（100km）时，红方干扰机开启。
+编写脚本逻辑：如果蓝方雷达受到干扰（检测到干扰信号），则自动切换频率或缩小扫描范围以尝试烧穿干扰（Burn-through）。
+记录干扰开始和雷达模式切换的时间点到日志中。
+
+【AFSIM 脚本结果】:
+----------------------------------------
+// 文件名: electronic_warfare_scenario.txt
+
+// 1. 定义蓝方飞机平台类型（装备雷达）
+platform_type BLUE_AIRCRAFT WSF_PLATFORM
+    icon fighter
+    radar_signature AIRCRAFT_RADAR_SIGNATURE
+
+    mover WSF_AIR_MOVER
+        maximum_linear_acceleration 3.0 g
+        maximum_radial_acceleration 4.0 g
+        maximum_altitude 40000 ft
+        minimum_altitude 10000 ft
+        roll_rate_limit 40 deg/s
+        turn_rate_limit 20 deg/s
+    end_mover
+
+    sensor blue_radar WSF_RADAR_SENSOR
+        one_m2_detect_range 150 nm
+        maximum_range 200 nm
+        frame_time 4 sec
+        antenna_height 2 m
+        scan_mode azimuth_and_elevation
+        azimuth_scan_limits -60 deg 60 deg  // 初始扫描范围
+        elevation_scan_limits -20 deg 20 deg
+        antenna_pattern BLUE_RADAR_ANTENNA
+        transmitter
+            antenna_pattern BLUE_RADAR_ANTENNA
+            power 1000 kw
+            frequency 3000 mhz  // 初始频率
+            internal_loss 2 db
+        end_transmitter
+        receiver
+            antenna_pattern BLUE_RADAR_ANTENNA
+            bandwidth 10 mhz
+            noise_power -150 dbw
+            internal_loss 3 db
+        end_receiver
+        reports_range
+        reports_bearing
+        reports_elevation
+        internal_link data_mgr
+    end_sensor
+
+    processor data_mgr WSF_TRACK_PROCESSOR
+        purge_interval 30 seconds
+    end_processor
+
+    processor ew_countermeasures WSF_SCRIPT_PROCESSOR
+        script_variables
+            bool jamming_detected = false
+            double jamming_start_time = 0.0
+            int frequency_hop_count = 0
+            bool narrow_scan_active = false
+            double original_frequency = 3000.0  // MHz
+            double original_azimuth_width = 120.0  // 度
+        end_script_variables
+
+        update_interval 1.0 s
+        on_update
+            // 检查雷达是否检测到干扰
+            WsfSensor radar = PLATFORM.Sensor("blue_radar");
+            if (radar.IsValid())
+            {
+                // 检查干扰信号
+                double noise_level = radar.ReceiverNoisePower();
+                double jamming_threshold = -130.0;  // dbw
+
+                if (!jamming_detected && noise_level > jamming_threshold)      
+                {
+                    jamming_detected = true;
+                    jamming_start_time = TIME_NOW;
+                    writeln("JAMMING DETECTED at time: ", TIME_NOW,
+                           " Noise level: ", noise_level, " dbw");
+
+                    // 第一次应对：频率跳变
+                    frequency_hop();
+                }
+
+                if (jamming_detected)
+                {
+                    // 如果干扰持续，尝试烧穿策略
+                    double jamming_duration = TIME_NOW - jamming_start_time;   
+
+                    // 10秒后如果干扰仍然存在，切换到窄扫描模式
+                    if (jamming_duration > 10.0 && !narrow_scan_active)        
+                    {
+                        switch_to_narrow_scan();
+                    }
+
+                    // 30秒后如果干扰仍然存在，再次频率跳变
+                    if (jamming_duration > 30.0 && frequency_hop_count < 3)    
+                    {
+                        frequency_hop();
+                    }
+
+                    // 检查干扰是否消失
+                    if (noise_level < jamming_threshold - 10.0)
+                    {
+                        jamming_detected = false;
+                        writeln("JAMMING CEASED at time: ", TIME_NOW);
+
+                        // 恢复原始设置
+                        if (narrow_scan_active)
+                        {
+                            restore_original_scan();
+                        }
+                    }
+                }
+            }
+        end_on_update
+
+        script void frequency_hop()
+            WsfSensor radar = PLATFORM.Sensor("blue_radar");
+            if (radar.IsValid())
+            {
+                frequency_hop_count += 1;
+
+                // 跳频到新频率（示例：±200MHz范围内）
+                double new_frequency = original_frequency + (frequency_hop_count % 3 - 1) * 200.0;
+                radar.SetTransmitterFrequency(new_frequency);
+
+                writeln("Frequency hop #", frequency_hop_count,
+                       " to ", new_frequency, " MHz at time: ", TIME_NOW);     
+            }
+        end script
+
+        script void switch_to_narrow_scan()
+            WsfSensor radar = PLATFORM.Sensor("blue_radar");
+            if (radar.IsValid())
+            {
+                narrow_scan_active = true;
+                // 缩小扫描范围到原来的1/4
+                radar.SetAzimuthScanLimits(-15 deg, 15 deg);
+                radar.SetElevationScanLimits(-10 deg, 10 deg);
+
+                writeln("Switched to narrow scan mode at time: ", TIME_NOW,    
+                       " Azimuth: ±15 deg, Elevation: ±10 deg");
+            }
+        end script
+
+        script void restore_original_scan()
+            WsfSensor radar = PLATFORM.Sensor("blue_radar");
+            if (radar.IsValid())
+            {
+                narrow_scan_active = false;
+                radar.SetAzimuthScanLimits(-60 deg, 60 deg);
+                radar.SetElevationScanLimits(-20 deg, 20 deg);
+                radar.SetTransmitterFrequency(original_frequency);
+
+                writeln("Restored original radar settings at time: ", TIME_NOW);
+            }
+        end script
+    end_processor
+end_platform_type
+
+// 2. 定义红方地面干扰站平台类型
+platform_type RED_JAMMER_STATION WSF_PLATFORM
+    icon jammer
+    radar_signature JAMMER_RADAR_SIGNATURE
+
+    processor jammer_control WSF_SCRIPT_PROCESSOR
+        script_variables
+            bool jamming_active = false
+            double jamming_range = 100.0 km
+        end_script_variables
+
+        update_interval 2.0 s
+        on_update
+            // 检查是否有蓝方飞机进入干扰范围
+            bool blue_aircraft_in_range = false;
+
+            for (int i=0; i < PLATFORM.MasterTrackList().Count(); i+=1)        
+            {
+                WsfTrack track = PLATFORM.MasterTrackList().TrackEntry(i);     
+                if (track.Side() == "blue" && track.TypeName() == "BLUE_AIRCRAFT")
+                {
+                    double distance = PLATFORM.GroundRangeTo(track);
+                    if (distance < jamming_range)
+                    {
+                        blue_aircraft_in_range = true;
+                        break;
+                    }
+                }
+            }
+
+            // 控制干扰机开关
+            WsfWeapon jammer = PLATFORM.Weapon("spot_jammer");
+            if (jammer.IsValid())
+            {
+                if (blue_aircraft_in_range && !jamming_active)
+                {
+                    // 开启干扰
+                    jammer.Activate();
+                    jamming_active = true;
+                    writeln("JAMMER ACTIVATED at time: ", TIME_NOW);
+                }
+                else if (!blue_aircraft_in_range && jamming_active)
+                {
+                    // 关闭干扰
+                    jammer.Deactivate();
+                    jamming_active = false;
+                    writeln("JAMMER DEACTIVATED at time: ", TIME_NOW);
+                }
+            }
+        end_on_update
+    end_processor
+
+    weapon spot_jammer SPOT_JAMMER
+    end_weapon
+end_platform_type
+
+// 3. 定义干扰机武器
+weapon SPOT_JAMMER WSF_RF_JAMMER
+    maximum_number_of_spots 1
+    slew_mode fixed
+    maximum_range 150 km
+
+    transmitter
+        antenna_pattern JAMMER_ANTENNA
+        frequency_band 2800 mhz 3200 mhz  // 覆盖蓝方雷达频率范围
+        power 5000.0 w
+        internal_loss 1.0 db
+    end_transmitter
+end_weapon
+
+// 4. 定义天线模式
+antenna_pattern BLUE_RADAR_ANTENNA sinc_pattern
+    peak_gain 35 dB
+    minimum_gain -20 db
+    azimuth_beamwidth 3 deg
+    elevation_beamwidth 3 deg
+    sinc_parameter 1.5
+end_sinc_pattern
+end_antenna_pattern
+
+antenna_pattern JAMMER_ANTENNA rectangular_pattern
+    peak_gain 30 dB
+    minimum_gain -15 db
+    azimuth_beamwidth 30 deg
+    elevation_beamwidth 30 deg
+end_rectangular_pattern
+end_antenna_pattern
+
+// 5. 定义特征
+radar_signature AIRCRAFT_RADAR_SIGNATURE
+    constant 5.0 m^2
+end_radar_signature
+
+radar_signature JAMMER_RADAR_SIGNATURE
+    constant 10.0 m^2
+end_radar_signature
+
+// 6. 定义平台实例
+platform blue_aircraft_1 BLUE_AIRCRAFT
+    position 30:10:00.000n 81:00:00.000w
+    side blue
+    altitude 25000 ft
+    heading 90 deg
+
+    route
+        label Start
+        position 30:10:00.000n 81:00:00.000w altitude 25000 ft
+        speed 400 kts
+
+        position 30:10:00.000n 81:30:00.000w altitude 25000 ft
+
+        position 30:00:00.000n 81:30:00.000w altitude 25000 ft
+
+        position 30:00:00.000n 81:00:00.000w altitude 25000 ft
+
+        goto Start
+    end_route
+end_platform
+
+platform red_jammer_1 RED_JAMMER_STATION
+    position 30:05:00.000n 81:15:00.000w
+    side red
+    altitude 0 ft
+    heading 0 deg
+end_platform
+
+// 7. 设置事件输出以记录干扰事件
+event_output
+    enable MESSAGE_RECEIVED
+    enable MESSAGE_TRANSMITTED
+    enable SENSOR_TRACK_INITIATED
+    enable SENSOR_TRACK_DROPPED
+    enable COMMENT
+end_event_output
+
+// 8. 设置日志文件
+log_file output/ew_scenario.log
+----------------------------------------
+
+【编译测试结果】:
+----------------------------------------
+***** FATAL: Could not process input files. 
+    ***** ERROR: Unknown command: sinc_pattern 
+             'task1.txt', line 227, near column 48
+-----------------
+
+**************************************************
+
